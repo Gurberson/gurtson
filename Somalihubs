@@ -13709,11 +13709,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local ping
                 if cr_minutes >= 120 then
-                    ping = "<@1540989345484247102>"
+                    ping = "<@&1540989345484247102>"
                 elseif cr_minutes >= 60 then
-                    ping = "<@1540989301079416852>"
+                    ping = "<@&1540989301079416852>"
                 elseif cr_minutes >= 35 and player_count >= 15 then
-                    ping = "<@1540989301079416852>"
+                    ping = "<@&1540989301079416852>"
                 else
                     return
                 end

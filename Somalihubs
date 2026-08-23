@@ -13700,15 +13700,22 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     return math.floor((os.time() - last_spawned) / 60)
                 end)
 
-                if not success or not cr_minutes or cr_minutes < 60 then
+                if not success or not cr_minutes then
                     return
                 end
+
+                local current_players = plrs:GetPlayers()
+                local player_count = #current_players
 
                 local ping
                 if cr_minutes >= 120 then
                     ping = "<@1540989345484247102>"
-                else
+                elseif cr_minutes >= 60 then
                     ping = "<@1540989301079416852>"
+                elseif cr_minutes >= 35 and player_count >= 15 then
+                    ping = "<@1540989301079416852>"
+                else
+                    return
                 end
 
                 if not cheat_client.config.webhook or cheat_client.config.webhook == "" then
@@ -13717,7 +13724,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local server_name, server_region = get_server_info()
                 local player_names = {}
-                for _, player in ipairs(plrs:GetPlayers()) do
+                for _, player in ipairs(current_players) do
                     table.insert(player_names, player.Name)
                 end
 
@@ -13730,7 +13737,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     #player_names > 0 and table.concat(player_names, "\n") or "None"
                 )
 
-                local player_count = #plrs:GetPlayers()
                 local footer_text
                 if cheat_client.config.webhook_show_username ~= false then
                     footer_text = string.format("Players: %d/23 | %s | Job: %s", player_count, plr.Name, game.JobId)
@@ -13738,10 +13744,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     footer_text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
                 end
 
+                local alert_color = cr_minutes >= 120 and 0xff0000 or 0xffa500
+
                 local embed = {
                     title = string.format("Castle Rock Alert | %dm", cr_minutes),
                     description = description,
-                    color = 0xffa500,
+                    color = alert_color,
                     footer = {
                         text = footer_text
                     },

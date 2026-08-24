@@ -5,7 +5,7 @@ end
 
 local DEFAULT_RAW = getgenv().hydroxide_raw or "https://git.fable.bz/zyu/hydroxide/raw/branch/main/"
 local DEPENDENCIES_RAW = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/DEPENDENCIES/"
-local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/Somalihubs"
+local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/mumbaihydroxide"
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(1)

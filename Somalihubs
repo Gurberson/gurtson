@@ -3,6 +3,7 @@ if not game:IsLoaded() then
 end
 
 local DEFAULT_RAW = getgenv().hydroxide_raw or "https://git.fable.bz/zyu/hydroxide/raw/branch/main/"
+local DEPENDENCIES_RAW = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/DEPENDENCIES/"
 local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/Somalihubs"
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -3154,7 +3155,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
     end
     
     local success, library_func = pcall(function()
-        return loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/Library.lua", true))()
+        return loadstring(game:HttpGet(DEPENDENCIES_RAW .. "Library.lua", true))()
     end)
 
     if success then
@@ -3165,8 +3166,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         getgenv().Options = library.Options or {}
         getgenv().Labels = library.Labels or {}
 
-        local SaveManager = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/SaveManager.lua?nonce="..tostring(math.random())) )()
-        local ThemeManager = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/ThemeManager.lua?nonce="..tostring(math.random()) ))()
+        local SaveManager = loadstring(game:HttpGet(DEPENDENCIES_RAW .. "SaveManager.lua?nonce="..tostring(math.random())) )()
+        local ThemeManager = loadstring(game:HttpGet(DEPENDENCIES_RAW .. "ThemeManager.lua?nonce="..tostring(math.random()) ))()
 
         SaveManager:SetLibrary(library)
         ThemeManager:SetLibrary(library)
@@ -19694,7 +19695,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     Callback = function(state)
                         if state then
                             local success, result = pcall(function()
-                                local LoggerGui = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/Chatlogger.lua"))()
+                                local LoggerGui = loadstring(game:HttpGet(DEPENDENCIES_RAW .. "Chatlogger.lua"))()
                                 return LoggerGui.new(cheat_client, utility)
                             end)
 

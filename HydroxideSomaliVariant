@@ -568,7 +568,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             flight_speed = 100,
             better_flight = false,
             climb_boost = false,
-            climb_boost_value = 0.5,
+            climb_boost_value = 2.1,
 
             auto_dialogue = false,
             auto_bard = false,
@@ -589,6 +589,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             temperature_lock = false,
             textures = false,
             no_fall = false,
+            fall_damage_reducer = false,
+            fall_damage_reduction = 95,
             no_killbrick = false,
             no_mob_trigger = false,
             freecam = false,
@@ -8354,6 +8356,27 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_character = Tabs.Exploits:AddLeftGroupbox("Character")
             local group_camera = Tabs.Exploits:AddRightGroupbox("Camera")
             local group_exploits = Tabs.Exploits:AddRightGroupbox("Exploits")
+
+            group_exploits:AddToggle("fall_damage_reducer", {
+                Text = "Fall Damage Reducer",
+                Default = cheat_client.config.fall_damage_reducer,
+                Callback = function(value)
+                    cheat_client.config.fall_damage_reducer = value
+                end
+            })
+
+            group_exploits:AddSlider("fall_damage_reduction", {
+                Text = "Fall Damage Reduction %",
+                Default = cheat_client.config.fall_damage_reduction,
+                Min = 0,
+                Max = 100,
+                Rounding = 1,
+                Callback = function(value)
+                    cheat_client.config.fall_damage_reduction = value
+                end
+            })
+
+            group_exploits:AddDivider()
     
             do
                 group_character:AddToggle("instant_mine", {
@@ -21793,8 +21816,62 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     if shared and remotes_folder and Event.Parent == remotes_folder then
                         local no_fall_enabled = (Toggles and Toggles.no_fall and Toggles.no_fall.Value) or (trinket_bot and trinket_bot.path_running)
+
+                        -- Preserve the original No Fall behavior.
                         if no_fall_enabled and #args == 2 and typeof(args[2]) == "table" then
                             return
+                        end
+
+                        local reducer_enabled = Toggles
+                            and Toggles.fall_damage_reducer
+                            and Toggles.fall_damage_reducer.Value
+
+                        if reducer_enabled
+                            and #args == 2
+                            and typeof(args[1]) == "table"
+                            and typeof(args[2]) == "table"
+                        then
+                            local arg1Keys = 0
+                            local arg2Keys = 0
+
+                            for _ in pairs(args[1]) do
+                                arg1Keys += 1
+                                if arg1Keys > 2 then break end
+                            end
+
+                            for _ in pairs(args[2]) do
+                                arg2Keys += 1
+                                if arg2Keys > 0 then break end
+                            end
+
+                            local is_fall_shape = arg1Keys == 2
+                                and arg2Keys == 0
+                                and typeof(args[1][1]) == "number"
+                                and typeof(args[1][2]) == "number"
+
+                            if is_fall_shape then
+                                local fallData = args[1]
+                                local originalSeverity = fallData[2]
+                                local reductionPercent = math.clamp(cheat_client.config.fall_damage_reduction or 0, 0, 100)
+                                local multiplier = 1 - (reductionPercent / 100)
+                                local reducedSeverity = originalSeverity * multiplier
+
+                                local changed = pcall(function()
+                                    fallData[2] = reducedSeverity
+                                end)
+
+                                if changed then
+                                    pcall(function()
+                                        old_remote(Event, table.unpack(args))
+                                    end)
+
+                                    pcall(function()
+                                        fallData[2] = originalSeverity
+                                    end)
+
+                                    return
+                                end
+                            end
                         end
                     end
                     

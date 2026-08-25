@@ -460,6 +460,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             no_stun = false,
             gelidus_boost = false,
             foot_serum = false,
+            abyss_walker_enhancer = false,
             anti_confusion = false,
 
             auto_perfect_block = false,
@@ -7444,6 +7445,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.foot_serum
             })
 
+            group_combat_utils:AddToggle("AbyssWalkerEnhancer", {
+                Text = "Abyss Walker Enhancer",
+                Default = cheat_client.config.abyss_walker_enhancer
+            })
+
             group_combat_utils:AddDivider()
 
             group_combat_utils:AddLabel("Attach to Back"):AddKeyPicker("AttachToBackKeybind", {
@@ -7642,6 +7648,21 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     if cheat_client.stop_foot_serum then
                         cheat_client.stop_foot_serum()
+                    end
+                end
+            end)
+
+            Toggles.AbyssWalkerEnhancer:OnChanged(function()
+                local value = Toggles.AbyssWalkerEnhancer.Value
+                cheat_client.config.abyss_walker_enhancer = value
+
+                if value then
+                    if cheat_client.start_abyss_walker_enhancer then
+                        cheat_client.start_abyss_walker_enhancer()
+                    end
+                else
+                    if cheat_client.stop_abyss_walker_enhancer then
+                        cheat_client.stop_abyss_walker_enhancer()
                     end
                 end
             end)
@@ -25877,6 +25898,207 @@ end
 
             if Toggles and Toggles.FootSerum and Toggles.FootSerum.Value then
                 start_foot_serum()
+            end
+        end
+
+        do
+            local ABYSS_SLAM_SPEED = 290
+            local ABYSS_SPEED_LOCK_FROM = 56
+            local ABYSS_SPEED_LOCK_TO = 70
+
+            local abyss_movers = {}
+            local abyss_speed_locks = {}
+
+            local function clear_abyss_character_connections()
+                local names = {
+                    "abyss_walker_root_child_added",
+                    "abyss_walker_boosts_child_added",
+                }
+
+                for _, name in ipairs(names) do
+                    local connection = cheat_client.feature_connections[name]
+                    if connection then
+                        connection:Disconnect()
+                        cheat_client.feature_connections[name] = nil
+                    end
+                end
+            end
+
+            local function track_abyss_mover(root, mover)
+                if not mover:IsA("BodyVelocity") then return end
+                if mover.Name ~= "LeapMover" then return end
+                if abyss_movers[mover] then return end
+
+                abyss_movers[mover] = {
+                    root = root,
+                    saw_upward_phase = false,
+                    slamming = false,
+                    original_p = mover.P,
+                    original_max_force = mover.MaxForce,
+                }
+            end
+
+            local function track_abyss_speed_lock(obj)
+                if not obj:IsA("NumberValue") then return end
+                if obj.Name ~= "SpeedLock" then return end
+                if abyss_speed_locks[obj] then return end
+
+                local info = {
+                    changed = false,
+                    connection = nil,
+                }
+                abyss_speed_locks[obj] = info
+
+                local function apply()
+                    if not cheat_client.config.abyss_walker_enhancer then return end
+                    if not obj.Parent then return end
+
+                    if obj.Value == ABYSS_SPEED_LOCK_FROM then
+                        obj.Value = ABYSS_SPEED_LOCK_TO
+                        info.changed = true
+                    end
+                end
+
+                apply()
+
+                info.connection = utility:Connection(obj:GetPropertyChangedSignal("Value"), function()
+                    apply()
+                end)
+            end
+
+            local function setup_abyss_character(character)
+                if not cheat_client.config.abyss_walker_enhancer then return end
+
+                clear_abyss_character_connections()
+
+                abyss_movers = {}
+
+                for obj, info in pairs(abyss_speed_locks) do
+                    if info.connection then
+                        info.connection:Disconnect()
+                    end
+                    abyss_speed_locks[obj] = nil
+                end
+
+                local root = FindFirstChild(character, "HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10)
+                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
+                if not root or not boosts then return end
+
+                for _, obj in ipairs(root:GetChildren()) do
+                    track_abyss_mover(root, obj)
+                end
+
+                for _, obj in ipairs(boosts:GetChildren()) do
+                    track_abyss_speed_lock(obj)
+                end
+
+                cheat_client.feature_connections.abyss_walker_root_child_added = utility:Connection(root.ChildAdded, function(obj)
+                    track_abyss_mover(root, obj)
+                end)
+
+                cheat_client.feature_connections.abyss_walker_boosts_child_added = utility:Connection(boosts.ChildAdded, function(obj)
+                    track_abyss_speed_lock(obj)
+                end)
+            end
+
+            local function start_abyss_walker_enhancer()
+                if cheat_client.feature_connections.abyss_walker_enhancer then return end
+
+                abyss_movers = {}
+                abyss_speed_locks = {}
+
+                if plr.Character then
+                    setup_abyss_character(plr.Character)
+                end
+
+                cheat_client.feature_connections.abyss_walker_character_added = utility:Connection(plr.CharacterAdded, function(character)
+                    setup_abyss_character(character)
+                end)
+
+                cheat_client.feature_connections.abyss_walker_enhancer = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
+                    if not cheat_client.config.abyss_walker_enhancer then return end
+
+                    for mover, info in pairs(abyss_movers) do
+                        local root = info.root
+
+                        if not mover.Parent or not root or not root.Parent then
+                            abyss_movers[mover] = nil
+                            continue
+                        end
+
+                        local actual_y = root.AssemblyLinearVelocity.Y
+
+                        if not info.saw_upward_phase then
+                            if actual_y > 5 then
+                                info.saw_upward_phase = true
+                            end
+                            continue
+                        end
+
+                        if not info.slamming and actual_y <= 0 then
+                            info.slamming = true
+
+                            local original_max_force = info.original_max_force
+                            mover.MaxForce = Vector3.new(
+                                original_max_force.X,
+                                1000000000,
+                                original_max_force.Z
+                            )
+
+                            mover.P = 10000
+                        end
+
+                        if info.slamming then
+                            local velocity = mover.Velocity
+                            mover.Velocity = Vector3.new(
+                                velocity.X,
+                                math.min(velocity.Y, -ABYSS_SLAM_SPEED),
+                                velocity.Z
+                            )
+                        end
+                    end
+                end))
+            end
+
+            local function stop_abyss_walker_enhancer()
+                if cheat_client.feature_connections.abyss_walker_enhancer then
+                    cheat_client.feature_connections.abyss_walker_enhancer:Disconnect()
+                    cheat_client.feature_connections.abyss_walker_enhancer = nil
+                end
+
+                if cheat_client.feature_connections.abyss_walker_character_added then
+                    cheat_client.feature_connections.abyss_walker_character_added:Disconnect()
+                    cheat_client.feature_connections.abyss_walker_character_added = nil
+                end
+
+                clear_abyss_character_connections()
+
+                for mover, info in pairs(abyss_movers) do
+                    if mover and mover.Parent then
+                        mover.P = info.original_p
+                        mover.MaxForce = info.original_max_force
+                    end
+                    abyss_movers[mover] = nil
+                end
+
+                for obj, info in pairs(abyss_speed_locks) do
+                    if info.connection then
+                        info.connection:Disconnect()
+                    end
+
+                    if info.changed and obj and obj.Parent and obj.Value == ABYSS_SPEED_LOCK_TO then
+                        obj.Value = ABYSS_SPEED_LOCK_FROM
+                    end
+
+                    abyss_speed_locks[obj] = nil
+                end
+            end
+
+            cheat_client.start_abyss_walker_enhancer = start_abyss_walker_enhancer
+            cheat_client.stop_abyss_walker_enhancer = stop_abyss_walker_enhancer
+
+            if Toggles and Toggles.AbyssWalkerEnhancer and Toggles.AbyssWalkerEnhancer.Value then
+                start_abyss_walker_enhancer()
             end
         end
 

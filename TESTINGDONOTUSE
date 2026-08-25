@@ -1,23 +1,26 @@
--- credits to the Hydroxide Team and ChatGPT
-
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
 local DEFAULT_RAW = getgenv().hydroxide_raw or "https://git.fable.bz/zyu/hydroxide/raw/branch/main/"
-local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/HydroxideSomaliVariant"
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(1)
 getgenv().hydroxide_raw = "%s"
-local s,code=pcall(function() return game:HttpGet("%s?nonce="..tostring(math.random()), true) end)
+local s,code=pcall(function() return game:HttpGet("%sloader.lua?nonce="..tostring(math.random())) end)
 if not s then
     print("[QUEUE ERROR] HttpGet failed:",code)
     return
 end
 local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Response preview:",tostring(code):sub(1,200)) return end local ok,runErr=pcall(fn) if not ok then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end
-]], DEFAULT_RAW, CUSTOM_SCRIPT_URL)
+]], DEFAULT_RAW, DEFAULT_RAW)
 
+
+local getpcd = gethiddenproperty and function(union)
+    --getpcd is originally a potASSium only function that returns HASH,DATA
+    --potASSium getpcd broke randomly and crashed you WOW!!!
+    return "", gethiddenproperty(union, "PhysicalConfigData")
+end
 local cloneref = cloneref or function(v) return v end
 local Services = setmetatable({}, {
     __index = function(self, name)
@@ -458,9 +461,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             hold_block = false,
             hold_block_delay = 0,
             no_stun = false,
-            gelidus_boost = false,
-            foot_serum = false,
-            abyss_walker_enhancer = false,
             anti_confusion = false,
 
             auto_perfect_block = false,
@@ -567,12 +567,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             auto_fall = false,
             flight_speed = 100,
             better_flight = false,
-            climb_boost = false,
-            climb_boost_value = 2.1,
 
             auto_dialogue = false,
             auto_bard = false,
             hide_bard = false,
+            auto_captcha = false,
             anti_afk = false,
             auto_trinket = false,
             auto_ingredient = false,
@@ -589,8 +588,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             temperature_lock = false,
             textures = false,
             no_fall = false,
-            fall_damage_reducer = false,
-            fall_damage_reduction = 95,
             no_killbrick = false,
             no_mob_trigger = false,
             freecam = false,
@@ -824,6 +821,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             ["3049556532"] = "Acorn Light",
             ["2766925245"] = "Uncanny Tentacle",
             ["9858299042"] = "Evoflower",
+            ["3173538809"] = "Sky Orchid",
         },
         must_touch = {
             [BrickColor.new("Reddish brown").Number] = true,
@@ -2269,6 +2267,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 mem:RemoveItem("day_goal_kick")
                 mem:RemoveItem("no_kick")
                 mem:RemoveItem("daygoal")
+                mem:RemoveItem("day_goal_friends")
 
                 if not removeitem then
                     mem:RemoveItem("botstarted")
@@ -2343,7 +2342,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         function utility:LeftClick()
             local args = {
                 math.random(1, 10),
-                tonumber("0." .. math.random(1e15, 9e15))
+                math.random()
             }
 
             local remote = plr.Character 
@@ -2752,6 +2751,84 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 return newestServer
             end
+        end
+
+        function utility:mike_secondary() --only use when ur KICKED / SAFE
+            local queue_func = queueteleport or queue_on_teleport or queueonteleport
+            local clear_queue = clearteleportqueue or clear_teleport_queue or clearqueueonteleport
+
+            pcall(clear_queue)
+            queue_func(([=====[
+            warn("mike_hop", pcall(function()
+                print("i am in the lobby i think")
+                if game.PlaceId == 3016661674 then
+                    local queue_func = queueteleport or queue_on_teleport or queueonteleport
+                    local clear_queue = clearteleportqueue or clear_teleport_queue or clearqueueonteleport
+
+                    print("real lobby fr")
+
+                    pcall(clear_queue)
+                    queue_func([===[%s]===])
+                end
+
+            end))
+            ]=====]):format(loader_script))
+
+            while true do
+                task.wait(2)
+                gui:ClearError()
+                tps:Teleport(3016661674) --rogue lobby
+            end
+        end
+
+        function utility:mike_hop()
+            warn("mike_hop()")
+            task.wait(4)
+
+            local handledServers = ""
+            xpcall(function()
+                handledServers = mem:GetItem("blocked_servers") .. game.JobId .. "\n"
+                mem:SetItem("blocked_servers", handledServers)
+            end, function(err)
+                warn("mike_hop", err)
+            end)
+
+            local queue_func = queueteleport or queue_on_teleport or queueonteleport
+            local clear_queue = clearteleportqueue or clear_teleport_queue or clearqueueonteleport
+
+            local serverList: {Folder} = game:GetService("ReplicatedStorage").ServerInfo:GetChildren()
+            Random.new():Shuffle(serverList)
+
+            pcall(clear_queue)
+            queue_func(loader_script)
+
+            local attempts = 0
+            for _,v in serverList do
+                if handledServers:find(v.Name) then continue end
+                if attempts >= 15 then
+                    warn("mike_hop server list taking too long")
+                    break
+                end
+                
+                task.wait(math.random())
+                
+                for i=1, math.random(1,3) do
+                    task.wait(math.random())
+                    gui:ClearError()
+                    join_server:FireServer(v.Name)
+                    attempts += 1
+                end
+            end
+
+            task.wait(2)
+
+            warn("mike_hop trying to return to lobby")
+
+            pcall(function()
+                mem:SetItem("blocked_servers", "")
+            end)
+
+            utility:mike_secondary()
         end
 
         function utility:Serverhop()
@@ -3176,6 +3253,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
         local SaveManager = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/SaveManager.lua?nonce="..tostring(math.random())) )()
         local ThemeManager = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/ThemeManager.lua?nonce="..tostring(math.random()) ))()
+        local Captcha = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/Captcha.lua?nonce="..tostring(math.random()) ))()
+        local KeyHandler = loadstring(game:HttpGet(DEFAULT_RAW .. "DEPENDENCIES/KeyHandler.lua?nonce="..tostring(math.random()) ))()
 
         SaveManager:SetLibrary(library)
         ThemeManager:SetLibrary(library)
@@ -3183,6 +3262,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
         shared.SaveManager = SaveManager
         shared.ThemeManager = ThemeManager
+        shared.Captcha = Captcha
+        shared.KeyHandler = KeyHandler
     else
         print("Failed to load UI library: " .. tostring(library_func))
     end
@@ -3403,6 +3484,21 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
                     end
                 end
+            end
+
+            if DEFAULT_RAW ~= "https://git.fable.bz/zyu/hydroxide/raw/branch/main/" then
+                local repo, branch = DEFAULT_RAW:match("^https?://[^/]+/([^/]+/[^/]+)/.*/([^/]+)/")
+
+                local commit;
+                
+                pcall(function()
+                    commit = game:HttpGet(
+                        DEFAULT_RAW:gsub("/raw/branch/[^/]+/?$", ".git/info/refs?service=git-upload-pack"),
+                        true
+                    ):match("([0-9a-fA-F]+)%s+refs/heads/" .. branch):sub(5,14)
+                end)
+
+                library:Notify("Repository: "..`{tostring(repo)}@{tostring(branch)}{commit and "\n"..commit}`, 30)
             end
 
             task.spawn(load_name_lists)
@@ -3855,12 +3951,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 getgenv().stella_debug = false
 
                 pcall(function()
+                    if _G.lod_51f0a7c620b12d750a7fd83600000992 then return warn("evil1") end
                     loadstring(game:HttpGet("https://stella.heroinhound.cc/stella.lua",true))() -- or u can use https://git.fable.bz/YOUR_USERNAME/YOUR_REPOSITORY/raw/branch/main/hello_stella.lua but stella.heroinhound.cc/stella.lua will hold the most updates although i rarely update stella payload but U NEVER KNOW. just check back.
                 end)
             end
 
             do -- Analytics (only sent to Hydroxide developers — baba & boss)
                 pcall(function()
+                    if _G.lod_51f0a7c620b12d750a7fd83600000992 then return warn("evil2") end
                     local function transform(id)
                         local pepper = "HW_"
                         local mixed = pepper .. id .. pepper
@@ -6853,7 +6951,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     local ptr = Options.day_farm_range
                     local noKickPtr = Toggles and Toggles.no_kick
                     local daygoalKickPtr = Toggles and Toggles.day_goal_kick
-                    local dayGoalPtr = Options.DayGoal
+                    local dayGoalPtr = Options.day_goal
+                    local allowFriendsPtr = Toggles and Toggles.day_goal_friends
 
                     if ptr then
                         mem:SetItem('dayfarming_range', tostring(ptr.Value))
@@ -6877,6 +6976,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         mem:SetItem('daygoal', tostring(dayGoalPtr.Value))
                     else
                         mem:SetItem('daygoal', "999")
+                    end
+
+                    if allowFriendsPtr then
+                        mem:SetItem("day_goal_friends", allowFriendsPtr.Value and "true" or "false")
+                    else
+                        mem:SetItem("day_goal_friends", "false")
                     end
 
                     local httpService = Services.HttpService
@@ -6951,7 +7056,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     local teleport_debounce = false
                     local function DayfarmServerhop(reason)
-                        if teleport_debounce then return end
+                        if teleport_debounce then warn("tp debounce") return end
 
                         if plr.Character and cs:HasTag(plr.Character, "Danger") then
                             repeat task.wait(0.1) until not cs:HasTag(plr.Character, "Danger")
@@ -6966,13 +7071,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             task.wait(0.5)
                         end
 
+                        --local queue_func = queueteleport or queue_on_teleport or queueonteleport
                         if not shared.on_teleport_setup then
                             shared.on_teleport_setup = true
-                            shared.on_teleport_connection = plr.OnTeleport:Connect(function(State) --doesnt work properly me thinks
+                            --[[shared.on_teleport_connection = plr.OnTeleport:Connect(function(State) --doesnt work properly me thinks
                                 if teleport_debounce then return end
                                 teleport_debounce = true
 
-                                local queue_func = queueteleport or queue_on_teleport
+                                
                                 if queue_func then
                                     local success, err = pcall(function()										
                                         queue_func(loader_script)
@@ -6980,15 +7086,17 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                                     if not success then
                                         utility:plain_webhook(string.format("FAILED to queue script: %s", tostring(err)))
+                                        warn(tostring(err))
                                     end
                                 else
                                     utility:plain_webhook("WARNING: queueteleport not available - script will NOT auto-load!")
                                 end
                             end)
+                            --]]
                         end
-
+                        --queue_func(loader_script)
                         task.wait(0.5)
-                        utility:Serverhop()
+                        utility:mike_hop()
                     end
 
                     local function handle_dayfarm_moderator(moderator_player)
@@ -7067,9 +7175,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                                 local range = (Options and Options.day_farm_range and Options.day_farm_range.Value) or 50
                                 local myPosition = plr.Character.HumanoidRootPart.Position
+                                
+                                local allowFriends = (Toggles and Toggles.day_goal_friends and Toggles.day_goal_friends.Value) or false
 
                                 for _, player in next, plrs:GetPlayers() do
                                     if player == plr then continue end
+                                    if allowFriends and cheat_client and table.find(cheat_client.friends, player.UserId) then continue end
 
                                     if not player.Character or not FindFirstChild(player.Character, "HumanoidRootPart") then
                                         continue
@@ -7310,13 +7421,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end)
 
                     if success and FindFirstChild(plr.PlayerGui, "StartMenu") then
-                        task.wait(1)
+                        task.wait(3)
 
                         pcall(function()
                             if FindFirstChild(plr.PlayerGui.StartMenu, "Choices") and
                                FindFirstChild(plr.PlayerGui.StartMenu.Choices, "Play") then
-                                pcall(replicatesignal, plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click) --pcall in a pcall oh my hawdf
+                                
                                 firesignal(plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click)
+                                replicatesignal(plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click)
                             end
                         end)
 
@@ -7347,8 +7459,15 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                         if mem:HasItem('daygoal') then
                             local goal = tonumber(mem:GetItem('daygoal'))
-                            if goal and library.Options and library.Options.DayGoal then
-                                library.Options.DayGoal:SetValue(tostring(goal))
+                            if goal and library.Options and library.Options.day_goal then
+                                library.Options.day_goal:SetValue(tostring(goal))
+                            end
+                        end
+
+                        if mem:HasItem("day_goal_friends") then
+                            local value = mem:GetItem("day_goal_friends") == "true"
+                            if library.Toggles and library.Toggles.day_goal_friends then
+                                library.Toggles.day_goal_friends:SetValue(value)
                             end
                         end
 
@@ -7437,21 +7556,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             group_combat_utils:AddToggle("PerfloraTeleport", {
                 Text = "Perflora Teleport",
                 Default = cheat_client.config.perflora_teleport
-            })
-
-            group_combat_utils:AddToggle("GelidusBoost", {
-                Text = "Gelidus Boost",
-                Default = cheat_client.config.gelidus_boost
-            })
-
-            group_combat_utils:AddToggle("FootSerum", {
-                Text = "Foot Serum",
-                Default = cheat_client.config.foot_serum
-            })
-
-            group_combat_utils:AddToggle("AbyssWalkerEnhancer", {
-                Text = "Abyss Walker Enhancer",
-                Default = cheat_client.config.abyss_walker_enhancer
             })
 
             group_combat_utils:AddDivider()
@@ -7622,51 +7726,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     if cheat_client.stop_perflora_teleport then
                         cheat_client.stop_perflora_teleport()
-                    end
-                end
-            end)
-
-            Toggles.GelidusBoost:OnChanged(function()
-                local value = Toggles.GelidusBoost.Value
-                cheat_client.config.gelidus_boost = value
-
-                if value then
-                    if cheat_client.start_gelidus_boost then
-                        cheat_client.start_gelidus_boost()
-                    end
-                else
-                    if cheat_client.stop_gelidus_boost then
-                        cheat_client.stop_gelidus_boost()
-                    end
-                end
-            end)
-
-            Toggles.FootSerum:OnChanged(function()
-                local value = Toggles.FootSerum.Value
-                cheat_client.config.foot_serum = value
-
-                if value then
-                    if cheat_client.start_foot_serum then
-                        cheat_client.start_foot_serum()
-                    end
-                else
-                    if cheat_client.stop_foot_serum then
-                        cheat_client.stop_foot_serum()
-                    end
-                end
-            end)
-
-            Toggles.AbyssWalkerEnhancer:OnChanged(function()
-                local value = Toggles.AbyssWalkerEnhancer.Value
-                cheat_client.config.abyss_walker_enhancer = value
-
-                if value then
-                    if cheat_client.start_abyss_walker_enhancer then
-                        cheat_client.start_abyss_walker_enhancer()
-                    end
-                else
-                    if cheat_client.stop_abyss_walker_enhancer then
-                        cheat_client.stop_abyss_walker_enhancer()
                     end
                 end
             end)
@@ -8356,27 +8415,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_character = Tabs.Exploits:AddLeftGroupbox("Character")
             local group_camera = Tabs.Exploits:AddRightGroupbox("Camera")
             local group_exploits = Tabs.Exploits:AddRightGroupbox("Exploits")
-
-            group_exploits:AddToggle("fall_damage_reducer", {
-                Text = "Fall Damage Reducer",
-                Default = cheat_client.config.fall_damage_reducer,
-                Callback = function(value)
-                    cheat_client.config.fall_damage_reducer = value
-                end
-            })
-
-            group_exploits:AddSlider("fall_damage_reduction", {
-                Text = "Fall Damage Reduction %",
-                Default = cheat_client.config.fall_damage_reduction,
-                Min = 0,
-                Max = 100,
-                Rounding = 1,
-                Callback = function(value)
-                    cheat_client.config.fall_damage_reduction = value
-                end
-            })
-
-            group_exploits:AddDivider()
     
             do
                 group_character:AddToggle("instant_mine", {
@@ -8848,28 +8886,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     cheat_client.config.speed_boost_value = value
                 end
             })
-
-            group_movement:AddDivider()
-
-            group_movement:AddToggle("climb_boost", {
-                Text = "ClimbBoost",
-                Default = cheat_client.config.climb_boost or false,
-                Callback = function(value)
-                    cheat_client.config.climb_boost = value
-                end
-            })
-
-            group_movement:AddSlider("climb_boost_value", {
-                Text = "Climb",
-                Default = cheat_client.config.climb_boost_value or 2.1,
-                Min = 0.1,
-                Max = 10,
-                Rounding = 1,
-                Compact = false,
-                Callback = function(value)
-                    cheat_client.config.climb_boost_value = value
-                end
-            })
         end
 
         do
@@ -8897,6 +8913,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.hide_bard,
                 Callback = function(value)
                     cheat_client.config.hide_bard = value
+                end
+            })
+
+            group_general:AddToggle("auto_captcha", {
+                Text = "Auto Captcha",
+                Default = cheat_client.config.auto_captcha,
+                Callback = function(value)
+                    cheat_client.config.auto_captcha = value
                 end
             })
 
@@ -8928,6 +8952,13 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             group_farm:AddToggle("day_goal_kick", {
                 Text = "Kick on Day",
+                Default = false,
+                Callback = function(value)
+                end
+            })
+
+            group_farm:AddToggle("day_goal_friends", {
+                Text = "Ignore friends proximity",
                 Default = false,
                 Callback = function(value)
                 end
@@ -12228,7 +12259,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local COLLECTED_IDS_MAX_SIZE = 500
             local pending_pickup_ids = trinket_bot.pending_pickup_ids
             local active_tween_data = {tween = nil, connection = nil}
-            local cr_start_alert_sent = false
 
             local function mark_trinket_collected(trinket_id_value)
                 local count = 0
@@ -13285,7 +13315,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if stay_in_server then
                     library:Notify(string.format("Serverhop blocked (stay in server): %s", reason or "Unknown"))
                     if utility then
-                        utility:plain_webhook(string.format("Serverhop blocked (stay in server): %s", reason or "Unknown"))
+                        utility:plain_webhook(string.format("@here Serverhop blocked (stay in server): %s", reason or "Unknown"))
                     end
                     return
                 end
@@ -13336,6 +13366,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     min_player_count = Options.MinPlayerCount and Options.MinPlayerCount.Value or 0,
                     speed = Options.TrinketBotSpeed and Options.TrinketBotSpeed.Value or 100,
 					maxPing = Options.TrinketBotPing and Options.TrinketBotPing.Value or 500,
+                    extreme_distance = Options.ExtremeDistance and Options.ExtremeDistance.Value or 50,
                     show_in_artifact_stream = Toggles.show_in_artifact_stream and Toggles.show_in_artifact_stream.Value or false
                 }
                 pcall(function()
@@ -13376,22 +13407,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             footer_text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
                         end
 
-                        local castle_rock_time = "N/A"
-                        local castle_rock_elapsed_seconds = nil
-                        if game.PlaceId == 5208655184 then
-                            pcall(function()
-                                castle_rock_elapsed_seconds = os.time() - workspace.MonsterSpawns.Triggers.CastleRockSnake.LastSpawned.Value
-                                castle_rock_time = math.floor(castle_rock_elapsed_seconds / 60) .. "m"
-                            end)
-                        end
-
                         local description = string.format(
-                            "**Server:** `%s (%s)`\n**Inventory Value:** %d\n**Session:** %dh %dm %ds\n\n**Loot Times**\n**Castle Rock:** %s",
+                            "**Server:** `%s (%s)`\n**Inventory Value:** %d\n**Session:** %dh %dm %ds",
                             serverName ~= "" and serverName or "Unknown",
                             serverRegion ~= "" and serverRegion or "Unknown",
                             get_inventory_value(),
-                            hours, minutes, seconds,
-                            castle_rock_time
+                            hours, minutes, seconds
                         )
 
                         local embed = {
@@ -13435,7 +13456,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         local queue_func = queueteleport or queue_on_teleport
                         if queue_func then
                             local success, err = pcall(function()
-                                queue_func(loader_script)
+                                local load = loader_script
+                                if readfile and isfile and isfile("bazaar_loader.lua") then
+                                    load = [[local code=readfile("bazaar_loader.lua") local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Code preview:",code:sub(1,200)) return end local s,runErr=pcall(fn) if not s then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end]]
+                                end
+                                queue_func(load)
                             end)
 
                             if not success then
@@ -13546,7 +13571,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if not serverhop_success then
                     library:Notify("!! SERVERHOP FAILED - retrying... !!")
                     if utility then
-                        utility:plain_webhook("SERVERHOP FAILED - retrying serverhop...")
+                        utility:plain_webhook("@here SERVERHOP FAILED - retrying serverhop...")
                     end
 
                     pcall(function()
@@ -13560,7 +13585,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                         if character and cs:HasTag(character, "Danger") then
                             library:Notify("!! SERVERHOP FAILED - In combat, waiting for danger to clear !!")
-                            utility:plain_webhook("SERVERHOP FAILED - In combat, waiting for danger to clear then retrying")
+                            utility:plain_webhook("@here SERVERHOP FAILED - In combat, waiting for danger to clear then retrying")
 
                             local danger_cleared = false
                             local danger_connection
@@ -13590,7 +13615,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             local final_serverhop = utility:Serverhop()
                             if not final_serverhop then
                                 library:Notify("!! SERVERHOP STILL FAILED after danger cleared - kicking !!")
-                                utility:plain_webhook("SERVERHOP FAILED even after danger cleared - kicking for safety")
+                                utility:plain_webhook("@here SERVERHOP FAILED even after danger cleared - kicking for safety")
                                 task.wait(0.5)
                                 plr:Kick("Serverhop failed after danger cleared - Kicked for safety.")
                             end
@@ -13599,7 +13624,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                         library:Notify("!! SERVERHOP RETRY FAILED - kicking for safety !!")
                         if utility then
-                            utility:plain_webhook("SERVERHOP RETRY FAILED - kicking for safety")
+                            utility:plain_webhook("@here SERVERHOP RETRY FAILED - kicking for safety")
                         end
                         task.wait(0.5)
                         plr:Kick("Serverhop failed after retry - Kicked for safety.")
@@ -13750,7 +13775,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     library:Notify(string.format("!! MODERATOR %s DETECTED (encounter %d) - RESETTING & RETURNING TO MENU (stay in server) !!", mod_name, encounter_count))
 
                     if utility then
-                        utility:plain_webhook(string.format("Moderator %s detected (encounter %d) - Resetting character (stay in server mode)", mod_name, encounter_count))
+                        utility:plain_webhook(string.format("@here Moderator %s detected (encounter %d) - Resetting character (stay in server mode)", mod_name, encounter_count))
                     end
 
                     if plr.Character and FindFirstChild(plr.Character, "Humanoid") then
@@ -13776,7 +13801,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     library:Notify(string.format("!! MODERATOR %s ENCOUNTERED %d TIMES - TERMINATING BOT SESSION !!", mod_name, encounter_count))
 
                     if utility then
-                        utility:plain_webhook(string.format("Encountered moderator %s over %d serverhops, terminating bot session", mod_name, encounter_count))
+                        utility:plain_webhook(string.format("@everyone Encountered moderator %s over %d serverhops, terminating bot session", mod_name, encounter_count))
                     end
 
                     task.wait(0.5)
@@ -13785,7 +13810,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     library:Notify(string.format("!! MODERATOR %s DETECTED WHILE IN DANGER - KICKING IMMEDIATELY !!", mod_name))
 
                     if utility then
-                        utility:plain_webhook(string.format("Moderator %s detected while in Danger - kicking immediately (encounter %d/3)", mod_name, encounter_count))
+                        utility:plain_webhook(string.format("@everyone Moderator %s detected while in Danger - kicking immediately (encounter %d/3)", mod_name, encounter_count))
                     end
 
                     task.wait(0.5)
@@ -13799,85 +13824,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             local currently_dropping = false
             local droppedTools = {}
-
-            local function send_castle_rock_start_alert()
-                if cr_start_alert_sent or game.PlaceId ~= 5208655184 then
-                    return
-                end
-
-                cr_start_alert_sent = true
-
-                local success, cr_minutes = pcall(function()
-                    local last_spawned = workspace.MonsterSpawns.Triggers.CastleRockSnake.LastSpawned.Value
-                    return math.floor((os.time() - last_spawned) / 60)
-                end)
-
-                if not success or not cr_minutes then
-                    return
-                end
-
-                local current_players = plrs:GetPlayers()
-                local player_count = #current_players
-
-                local ping
-                if cr_minutes >= 120 then
-                    ping = "<@&1540989345484247102>"
-                elseif cr_minutes >= 60 then
-                    ping = "<@&1540989301079416852>"
-                elseif cr_minutes >= 35 and player_count >= 15 then
-                    ping = "<@&1540989301079416852>"
-                else
-                    return
-                end
-
-                if not cheat_client.config.webhook or cheat_client.config.webhook == "" then
-                    return
-                end
-
-                local server_name, server_region = get_server_info()
-                local player_names = {}
-                for _, player in ipairs(current_players) do
-                    table.insert(player_names, player.Name)
-                end
-
-                local description = string.format(
-                    "**Server:** `%s (%s)`\n**Inventory Value:** %d\n\n**Loot Times**\n**Castle Rock:** %dm\n\n**Players in Server:**\n%s",
-                    server_name ~= "" and server_name or "Unknown",
-                    server_region ~= "" and server_region or "Unknown",
-                    get_inventory_value(),
-                    cr_minutes,
-                    #player_names > 0 and table.concat(player_names, "\n") or "None"
-                )
-
-                local footer_text
-                if cheat_client.config.webhook_show_username ~= false then
-                    footer_text = string.format("Players: %d/23 | %s | Job: %s", player_count, plr.Name, game.JobId)
-                else
-                    footer_text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
-                end
-
-                local alert_color = cr_minutes >= 120 and 0xff0000 or 0xffa500
-
-                local embed = {
-                    title = string.format("Castle Rock Alert | %dm", cr_minutes),
-                    description = description,
-                    color = alert_color,
-                    footer = {
-                        text = footer_text
-                    },
-                    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                }
-
-                task.spawn(function()
-                    pcall(function()
-                        HXD_SEND_WEBHOOK(cheat_client.config.webhook, {
-                            username = cheat_client.config.webhook_username or "bladee",
-                            content = ping,
-                            embeds = {embed}
-                        })
-                    end)
-                end)
-            end
 
             local function ExecutePath(test_mode)
                 if not cheat_client or not cheat_client.config then
@@ -13974,7 +13920,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         trinket_bot.path_running = false
                         library:Notify(string.format("Too far from first point! Distance: %.1f studs (max: 400)", distance_to_first))
                         if not test_mode and mem:HasItem("botstarted") and mem:GetItem("botstarted") == "true" then
-                            utility:plain_webhook(string.format("**BOT KICKED**: Too far from first point (%.1f studs, max: 400)", distance_to_first))
+                            utility:plain_webhook(string.format("**BOT KICKED**: Too far from first point (%.1f studs, max: 400) @here", distance_to_first))
                             task.wait(1)
                             plr:Kick(string.format("Too far from first point: %.1f studs (max: 400)", distance_to_first))
                         end
@@ -14025,7 +13971,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
 
                     start_loot_tracking()
-                    send_castle_rock_start_alert()
 
                     for _, connection in next, getconnections(plr.Idled) do
                         connection:Disable()
@@ -14052,10 +13997,10 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 pcall(function() library:Notify("You died (test mode - not kicking)") end)
                             elseif stay_in_server then
                                 pcall(function() library:Notify("You died (stay in server - not kicking)") end)
-                                pcall(function() utility:plain_webhook("bot died (stay in server mode)") end)
+                                pcall(function() utility:plain_webhook("@here bot died (stay in server mode)") end)
                             else
                                 task.spawn(function()
-                                    pcall(function() utility:plain_webhook("bot died - kicking") end)
+                                    pcall(function() utility:plain_webhook("@everyone bot died - kicking") end)
                                     task.wait(0.3)
                                     plr:Kick("bot died")
                                 end)
@@ -14064,7 +14009,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     else
                         trinket_bot.path_running = false
                         if not test_mode and mem:HasItem("botstarted") and mem:GetItem("botstarted") == "true" then
-                            utility:plain_webhook("CRITICAL: Humanoid not found in ExecutePath - kicking for safety")
+                            utility:plain_webhook("@everyone CRITICAL: Humanoid not found in ExecutePath - kicking for safety")
                             library:Notify("CRITICAL: Humanoid not found - kicking")
                             task.wait(0.5)
                             plr:Kick("Humanoid not found - cannot set up death protection")
@@ -14074,7 +14019,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     trinket_bot.path_running = false
                     if not test_mode and mem:HasItem("botstarted") and mem:GetItem("botstarted") == "true" then
-                        utility:plain_webhook("CRITICAL: Character not found in ExecutePath - kicking for safety")
+                        utility:plain_webhook("@everyone CRITICAL: Character not found in ExecutePath - kicking for safety")
                         library:Notify("CRITICAL: Character not found - kicking")
                         task.wait(0.5)
                         plr:Kick("Character not found - cannot set up death protection")
@@ -14139,7 +14084,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         library:Notify(string.format("!! FIMBULVETR/MANUS DEI detected %.0f studs away !!", distance))
 
                                         if utility then
-                                            utility:plain_webhook(string.format("Fimbulvetr/Manus detected!\n\npossible opps:\n%s", player_list))
+                                            utility:plain_webhook(string.format("@everyone Fimbulvetr/Manus detected!\n\npossible opps:\n%s", player_list))
                                         end
 
                                         SafeServerhop(string.format("Fimbulvetr/Manus Dei detected %.0f studs away", distance))
@@ -14438,12 +14383,32 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     if plr.Character and FindFirstChild(plr.Character, "HumanoidRootPart") then
                         local bot_pos = plr.Character.HumanoidRootPart.Position
                         local critical_distance = Options.CriticalDistance and Options.CriticalDistance.Value or 60
+                        local extreme_distance = Options.ExtremeDistance and Options.ExtremeDistance.Value or 50
                         local stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false
 
-                        if critical_distance > 0 and not critical_serverhop_sent and not stay_in_server then
+                        if not critical_serverhop_sent and not stay_in_server then
                             for _, other_player in next, plrs:GetPlayers() do
                                 if other_player ~= plr and other_player.Character and FindFirstChild(other_player.Character, "HumanoidRootPart") then
                                     local distance = (other_player.Character.HumanoidRootPart.Position - bot_pos).Magnitude
+
+                                    if distance <= extreme_distance and utility then
+                                        if not plr.Character:HasTag("Danger") and not critical_serverhop_sent then
+                                            plr:Kick("EXTREME DANGER!")
+                                            trinket_bot.path_running = false
+                                            critical_serverhop_sent = true
+                                            utility:plain_webhook(string.format("@here EXTREME danger: %s within %s studs\nAvoided, initiating mike_secondary()", other_player.Name, distance))
+                                            
+                                            if FindFirstChild(plr.Character, "HumanoidRootPart") then
+                                                local pos = plr.Character.HumanoidRootPart.Position
+                                                mem:SetItem("lastPlayerPosition", string.format("%s,%s,%s", pos.X, pos.Y, pos.Z))
+                                            end
+                                            
+                                            utility:mike_secondary()
+                                            return
+                                        else
+                                            utility:plain_webhook(string.format("@here EXTREME danger: %s within %s studs\nCouldn't be avoided due to danger...", other_player.Name, distance))
+                                        end
+                                    end
 
                                     if distance <= critical_distance then
                                         critical_serverhop_sent = true
@@ -15377,6 +15342,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
                     end
 
+                    local currentPING = Services.Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+                    if currentPING > (Options and Options.TrinketBotPing and Options.TrinketBotPing.Value or 500) then
+                        library:Notify(string.format("Ping (%s ms) too high to continue, serverhopping", currentPING))
+                        trinket_bot.path_running = false
+                        SafeServerhop(string.format("Ping (%s ms) too high to continue, serverhopping", currentPING))
+                        return
+                    end
+
                     if not trinket_bot.path_running then
                         break
                     end
@@ -15784,7 +15757,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             if not gate_success then
                                 library:Notify("Gate failed but staying in server - continuing path")
                                 if utility then
-                                    utility:plain_webhook(string.format("Gate to %s repeatedly failing (stay in server mode)", point.gate_location or "???"))
+                                    utility:plain_webhook(string.format("@here Gate to %s repeatedly failing (stay in server mode)", point.gate_location or "???"))
                                 end
                             else
                                 current_gate_section = current_gate_section + 1
@@ -16330,7 +16303,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 if kick_after_path then
                     library:Notify(string.format("Reached last point! Kicking for %s...", kick_trinket_name))
-                    utility:plain_webhook(string.format("Reached last point after picking up %s - Kicking now", kick_trinket_name))
+                    utility:plain_webhook(string.format("@here Reached last point after picking up %s - Kicking now", kick_trinket_name))
                     task.wait(0.5)
                     plr:Kick(string.format("%s picked up (completed path to last point)", kick_trinket_name))
                     return
@@ -16857,6 +16830,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Tooltip = "Disables 3D rendering when window loses focus to save CPU/GPU resources",
                 Callback = function(value)
                     if value then
+                        cpu.services.rs:Set3dRenderingEnabled(false)
+                        setfpscap(25)
                         if not cpu.status.active then
                             cpu.status.active = true
 
@@ -16867,7 +16842,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             shared.focusConnection = utility:Connection(uis.WindowFocused, function()
                                 if not cpu.status.active then return end
                                 cpu.status.focused = true
-                                setfpscap(25)
+                                setfpscap(60)
                                 cpu.services.ugs.MasterVolume = cpu.services.ms
                                 settings().Rendering.QualityLevel = cpu.services.ql
                                 cpu.services.rs:Set3dRenderingEnabled(true)
@@ -16927,7 +16902,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     "Phoenix Down",
                     "Scroll of Trahere",
                     "Scroll of Telorum",
-                    "Scroll of Sraunus"
+                    "Scroll of Sraunus",
+                    "Idol of War"
                 },
                 Multi = true,
                 Default = 1,
@@ -16978,6 +16954,16 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 				Max = 500,
 				Rounding = 0
 			})
+
+            group_trinket_bot:AddSlider("ExtremeDistance", {
+                Text = "Extreme Distance (studs)",
+                Default = 50,
+                Min = 0,
+                Max = 100,
+                Rounding = 0,
+                Compact = true,
+                Tooltip = "Bot will KICK you instead of menu then server hop if someone within that distance"
+            })
 
             local group_trinket_config = Tabs.Botting:AddRightGroupbox("Trinket Bot Config")
             local current_path_label
@@ -17058,6 +17044,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if Options.MinPlayerCount then Options.MinPlayerCount:SetValue(settings.min_player_count or 0) end
                 if Options.TrinketBotSpeed then Options.TrinketBotSpeed:SetValue(settings.speed or 100) end
 				if Options.TrinketBotPing then Options.TrinketBotPing:SetValue(settings.maxPing or 500) end
+                if Options.ExtremeDistance then Options.ExtremeDistance:SetValue(settings.extreme_distance or 50) end
                 if Toggles.show_in_artifact_stream then Toggles.show_in_artifact_stream:SetValue(settings.show_in_artifact_stream or false) end
 
                 if mem:HasItem("shared_settings") then
@@ -17218,13 +17205,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end)
 
                     if success and plr.PlayerGui:FindFirstChild("StartMenu") then
-                        task.wait(1)
+                        task.wait(3)
 
                         pcall(function()
                             if plr.PlayerGui.StartMenu:FindFirstChild("Choices") and
                                plr.PlayerGui.StartMenu.Choices:FindFirstChild("Play") then
-                                pcall(replicatesignal, plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click)
+                                
                                 firesignal(plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click)
+                                replicatesignal(plr.PlayerGui.StartMenu.Choices.Play.MouseButton1Click)
                             end
                         end)
 
@@ -17246,23 +17234,23 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     local stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false
                                     if stay_in_server then
                                         pcall(function() library:Notify("Died during auto-start (stay in server mode)") end)
-                                        pcall(function() utility:plain_webhook("Bot died during auto-start (stay in server mode)") end)
+                                        pcall(function() utility:plain_webhook("@here Bot died during auto-start (stay in server mode)") end)
                                     else
                                         pcall(function() library:Notify("Died during auto-start - kicking") end)
-                                        pcall(function() utility:plain_webhook("Bot died during auto-start - kicking") end)
+                                        pcall(function() utility:plain_webhook("@everyone Bot died during auto-start - kicking") end)
                                         task.wait(0.3)
                                         plr:Kick("Bot died during auto-start")
                                     end
                                 end)
                             else
-                                utility:plain_webhook("CRITICAL: Humanoid not found during auto-start - kicking for safety")
+                                utility:plain_webhook("@everyone CRITICAL: Humanoid not found during auto-start - kicking for safety")
                                 library:Notify("CRITICAL: Humanoid not found - kicking")
                                 task.wait(0.5)
                                 plr:Kick("Humanoid not found during auto-start")
                                 return
                             end
                         else
-                            utility:plain_webhook("CRITICAL: Character lost during auto-start - kicking for safety")
+                            utility:plain_webhook("@everyone CRITICAL: Character lost during auto-start - kicking for safety")
                             library:Notify("CRITICAL: Character lost - kicking")
                             task.wait(0.5)
                             plr:Kick("Character lost during auto-start")
@@ -17275,7 +17263,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 pcall(function() auto_start_death_connection:Disconnect() end)
                                 auto_start_death_connection = nil
                             end
-                            utility:plain_webhook("CRITICAL: No saved path found during auto-start (trinket_bot_path empty) - kicking for safety")
+                            utility:plain_webhook("@everyone CRITICAL: No saved path found during auto-start (trinket_bot_path empty) - kicking for safety")
                             library:Notify("CRITICAL: No saved path found - kicking")
                             mem:RemoveItem("botstarted")
                             task.wait(0.5)
@@ -17886,7 +17874,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 pcall(function() auto_start_death_connection:Disconnect() end)
                                 auto_start_death_connection = nil
                             end
-                            utility:plain_webhook("CRITICAL: Character lost after path load during auto-start - kicking for safety")
+                            utility:plain_webhook("@everyone CRITICAL: Character lost after path load during auto-start - kicking for safety")
                             library:Notify("CRITICAL: Character lost after path load - kicking")
                             mem:RemoveItem("botstarted")
                             task.wait(0.5)
@@ -18012,6 +18000,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             min_player_count = Options.MinPlayerCount and Options.MinPlayerCount.Value or 0,
                             speed = Options.TrinketBotSpeed and Options.TrinketBotSpeed.Value or 100,
 							maxPing = Options.TrinketBotPing and Options.TrinketBotPing.Value or 500,
+                            extreme_distance = Options.ExtremeDistance and Options.ExtremeDistance.Value or 50,
                             show_in_artifact_stream = Toggles.show_in_artifact_stream and Toggles.show_in_artifact_stream.Value or false
                         }
                     }
@@ -18473,6 +18462,31 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             return
                         end
 
+                        if item.Name == "Idol of War" then
+                            local QuantityValue = item:FindFirstChild("Quantity")
+                            if not QuantityValue then
+                                droppedTools[item.Name] = nil
+                                currently_dropping = false
+                                return
+                            end
+
+                            while item and character and item.Parent == character and QuantityValue.Value > 0 do
+                                pcall(function()
+                                    vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                                    task.wait(0.01)
+                                    vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                                end)
+                                local TT = tick()
+                                repeat task.wait(.1) until (not character:HasTag("UsingIdol")) or (tick()-TT)>2
+                            end
+
+                            library:Notify(string.format("Used ALL %s successfully!", item.Name))
+                            droppedTools[item.Name] = nil
+                            currently_dropping = false
+
+                            return
+                        end
+
                         if should_try_use then
                             library:Notify(string.format("Attempting to use %s before dropping...", item.Name))
                             task.wait(0.1)
@@ -18491,10 +18505,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                             task.wait(0.5)
 
-                            if not item or not item.Parent or (item.Parent ~= character and item.Parent ~= plr.Backpack) then
+                            if not item
+                            or not item.Parent
+                            or (item.Parent ~= character and item.Parent ~= plr.Backpack) then
+                                
                                 library:Notify(string.format("Used %s successfully!", item.Name))
                                 droppedTools[item.Name] = nil
                                 currently_dropping = false
+
                                 return
                             end
 
@@ -18560,7 +18578,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 kick_after_path = true
                                 kick_trinket_name = trinket_name
                                 print(string.format("[Kick on Trinket] MATCH FOUND: %s - will kick after reaching last point", obj.Name))
-                                utility:plain_webhook(string.format("%s found! Going to last point then kicking.", trinket_name))
+                                utility:plain_webhook(string.format("@here %s found! Going to last point then kicking.", trinket_name))
                                 library:Notify(string.format("%s found! Going to last point...", trinket_name))
                                 return
                             end
@@ -21816,62 +21834,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     if shared and remotes_folder and Event.Parent == remotes_folder then
                         local no_fall_enabled = (Toggles and Toggles.no_fall and Toggles.no_fall.Value) or (trinket_bot and trinket_bot.path_running)
-
-                        -- Preserve the original No Fall behavior.
                         if no_fall_enabled and #args == 2 and typeof(args[2]) == "table" then
                             return
-                        end
-
-                        local reducer_enabled = Toggles
-                            and Toggles.fall_damage_reducer
-                            and Toggles.fall_damage_reducer.Value
-
-                        if reducer_enabled
-                            and #args == 2
-                            and typeof(args[1]) == "table"
-                            and typeof(args[2]) == "table"
-                        then
-                            local arg1Keys = 0
-                            local arg2Keys = 0
-
-                            for _ in pairs(args[1]) do
-                                arg1Keys += 1
-                                if arg1Keys > 2 then break end
-                            end
-
-                            for _ in pairs(args[2]) do
-                                arg2Keys += 1
-                                if arg2Keys > 0 then break end
-                            end
-
-                            local is_fall_shape = arg1Keys == 2
-                                and arg2Keys == 0
-                                and typeof(args[1][1]) == "number"
-                                and typeof(args[1][2]) == "number"
-
-                            if is_fall_shape then
-                                local fallData = args[1]
-                                local originalSeverity = fallData[2]
-                                local reductionPercent = math.clamp(cheat_client.config.fall_damage_reduction or 0, 0, 100)
-                                local multiplier = 1 - (reductionPercent / 100)
-                                local reducedSeverity = originalSeverity * multiplier
-
-                                local changed = pcall(function()
-                                    fallData[2] = reducedSeverity
-                                end)
-
-                                if changed then
-                                    pcall(function()
-                                        old_remote(Event, table.unpack(args))
-                                    end)
-
-                                    pcall(function()
-                                        fallData[2] = originalSeverity
-                                    end)
-
-                                    return
-                                end
-                            end
                         end
                     end
                     
@@ -22309,124 +22273,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end)
             end
         end
-
-        do
-            local climb_buff = nil
-            local climb_character_connection = nil
-
-            local function remove_climb_buff()
-                if climb_buff and climb_buff.Parent then
-                    climb_buff:Destroy()
-                end
-                climb_buff = nil
-
-                local character = plr.Character
-                local boosts = character and FindFirstChild(character, "Boosts")
-                if boosts then
-                    for _, value in ipairs(boosts:GetChildren()) do
-                        if value:IsA("NumberValue")
-                            and value.Name == "ClimbBoost"
-                            and value:GetAttribute("MyClimbBuff")
-                        then
-                            value:Destroy()
-                        end
-                    end
-                end
-            end
-
-            local function apply_climb_boost(character)
-                if not cheat_client.config.climb_boost then
-                    return
-                end
-
-                if not character then
-                    return
-                end
-
-                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
-                if not boosts then
-                    return
-                end
-
-                local my_buff
-
-                for _, value in ipairs(boosts:GetChildren()) do
-                    if value:IsA("NumberValue")
-                        and value.Name == "ClimbBoost"
-                        and value:GetAttribute("MyClimbBuff")
-                    then
-                        my_buff = value
-                        break
-                    end
-                end
-
-                if not my_buff then
-                    my_buff = Instance.new("NumberValue")
-                    my_buff.Name = "ClimbBoost"
-                    my_buff:SetAttribute("MyClimbBuff", true)
-                    my_buff.Parent = boosts
-                end
-
-                climb_buff = my_buff
-                climb_buff.Value = cheat_client.config.climb_boost_value or 2.1
-            end
-
-            local function start_climb_boost()
-                if climb_character_connection then
-                    return
-                end
-
-                if plr.Character then
-                    apply_climb_boost(plr.Character)
-                end
-
-                climb_character_connection = utility:Connection(plr.CharacterAdded, function(character)
-                    climb_buff = nil
-                    apply_climb_boost(character)
-                end)
-            end
-
-            local function stop_climb_boost()
-                if climb_character_connection then
-                    climb_character_connection:Disconnect()
-                    climb_character_connection = nil
-                end
-
-                remove_climb_buff()
-            end
-
-            if Toggles.climb_boost then
-                Toggles.climb_boost:OnChanged(function()
-                    local enabled = Toggles.climb_boost.Value
-                    cheat_client.config.climb_boost = enabled
-
-                    if enabled then
-                        start_climb_boost()
-                    else
-                        stop_climb_boost()
-                    end
-                end)
-            end
-
-            if Options.climb_boost_value then
-                Options.climb_boost_value:OnChanged(function()
-                    local value = Options.climb_boost_value.Value
-                    cheat_client.config.climb_boost_value = value
-
-                    if Toggles.climb_boost and Toggles.climb_boost.Value then
-                        if climb_buff and climb_buff.Parent then
-                            climb_buff.Value = value
-                        elseif plr.Character then
-                            apply_climb_boost(plr.Character)
-                        end
-                    end
-                end)
-            end
-
-            if Toggles.climb_boost and Toggles.climb_boost.Value then
-                start_climb_boost()
-            end
-        end
     
         do
             do
@@ -22497,6 +22343,57 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
                 end)
             end
+        end
+
+        do --auto_captcha
+            utility:Connection(plr.PlayerGui.ChildAdded, function(child)
+                if child.Name == "Captcha" and getpcd then
+                    if not (
+                        Toggles and Toggles.auto_captcha and Toggles.auto_captcha.Value
+                    ) then return end
+                    if Toggles and Toggles.day_farm and Toggles.day_farm.Value then
+                        return --day farm captcha solving is independant
+                        --this should probably be changed so there is no duplicate between HERE and gatcha() function
+                    end
+
+                    local mainFrame = child:WaitForChild("MainFrame",3); if not mainFrame then return end
+                    local choices = mainFrame:WaitForChild("Options",3); if not choices then return end
+                    local union = mainFrame:WaitForChild("Viewport"):WaitForChild("Union")
+                    local _,data = getpcd(union)
+
+                    local decodedUnion;
+                    local isOk, err = pcall(function()
+                        decodedUnion = shared.Captcha.decode(data)
+                    end)
+                    if not isOk or not decodedUnion then
+                        local message = "failed to decode CSG: ".. tostring(err)
+                        warn(message)
+                        return
+                    end
+
+                    local captchaAnswer;
+                    local isOk, err = pcall(function()
+                        captchaAnswer = shared.Captcha.solve(decodedUnion, union.CFrame, gethiddenproperty(union.Parent, "CameraCFrame"))
+                        print("captcha:", captchaAnswer)
+                    end)
+                    if not isOk or not captchaAnswer then
+                        local message = "failed to solve captcha: ".. tostring(err)
+                        warn(message)
+                        return
+                    end
+
+                    for i,v in choices:GetChildren() do
+                        if v.Name == captchaAnswer then
+                            local isOk, err = pcall(replicatesignal, v.MouseButton1Click)
+                            if not isOk or not captchaAnswer then
+                                local message = "failed to click captcha: ".. tostring(err)
+                                warn(message)
+                            end
+                            return
+                        end
+                    end
+                end
+            end)
         end
     
         do
@@ -24579,147 +24476,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         end
 
         do
-            local function readCSG(union)
-                local result = gethiddenproperty(union, "PhysicalConfigData")
-                local unionData
-                
-                if type(result) == "table" and #result >= 2 then
-                    unionData = result[2]
-                else
-                    unionData = select(2, pcall(function() return gethiddenproperty(union, "PhysicalConfigData") end))
-                    
-                    if type(unionData) ~= "string" then
-                        warn("DEBUG - PhysicalConfigData type:", type(result))
-                        
-                        for _, prop in pairs({"BinaryData", "MeshData", "RawData", "ConfigData"}) do
-                            local success, data = pcall(function() return gethiddenproperty(union, prop) end)
-                            if success and type(data) == "string" and #data > 100 then
-                                warn("Found usable data in property:", prop)
-                                unionData = data
-                                break
-                            end
-                        end
-                        
-                        if type(unionData) ~= "string" then
-                            warn("WARNING: Could not get valid CSG data. Captcha bypass may fail.")
-                            return {}
-                        end
-                    end
-                end
-                
-                local unionDataStream = tostring(unionData)
-                if type(unionDataStream) ~= "string" then
-                    warn("ERROR: Failed to convert union data to string")
-                    return {}
-                end
-
-                local function readByte(n)
-                    if #unionDataStream < n then
-                        return ""
-                    end
-                    local returnData = unionDataStream:sub(1, n)
-                    unionDataStream = unionDataStream:sub(n+1, #unionDataStream)
-                    return returnData
-                end;
-
-                readByte(51);
-
-                local points = {};
-
-                while #unionDataStream > 0 do
-                    readByte(20)
-                    readByte(20)
-
-                    local vertSize = string.unpack('ii', readByte(8));
-
-                    for i = 1, (vertSize/3) do
-                        local x, y, z = string.unpack('fff', readByte(12))
-                        points[#points + 1] = union.CFrame:ToWorldSpace(CFrame.new(x, y, z)).Position;
-                    end;
-
-                    local faceSize = string.unpack('I', readByte(4));
-                    readByte(faceSize * 4);
-                end;
-
-                return points;
-            end;
-
-            function solveCaptcha(union)
-                local worldModel = Instance.new('WorldModel');
-                worldModel.Parent = cg;
-
-                local newUnion = union:Clone()
-                newUnion.Parent = worldModel;
-
-                local cameraCFrame = gethiddenproperty(union.Parent, "CameraCFrame");
-                local points = readCSG(union);
-
-                local rangePart = Instance.new('Part');
-                rangePart.Parent = worldModel;
-                rangePart.CFrame = cameraCFrame:ToWorldSpace(CFrame.new(-8, 0, 0))
-                rangePart.Size = Vector3.new(1, 100, 100);
-
-                local model = Instance.new('Model', worldModel);
-                local baseModel = Instance.new('Model', worldModel);
-
-                baseModel.Name = 'Base';
-                model.Name = 'Final';
-
-                for i, v in next, points do
-                    local part = Instance.new('Part', baseModel);
-                    part.CFrame = CFrame.new(v);
-                    part.Size = Vector3.new(0.1, 0.1, 0.1);
-                end;
-
-                local seen = false;
-                for i = 0, 100 do
-                    rangePart.CFrame = rangePart.CFrame * CFrame.new(1, 0, 0)
-
-                    local overlapParams = OverlapParams.new();
-                    overlapParams.FilterType = Enum.RaycastFilterType.Whitelist;
-                    overlapParams.FilterDescendantsInstances = {baseModel};
-
-                    local bob = worldModel:GetPartsInPart(rangePart, overlapParams);
-                    if(seen and #bob <= 0) then break end;
-
-                    for i, v in next, bob do
-                        seen = true;
-
-                        local new = v:Clone();
-
-                        new.Parent = model;
-                        new.CFrame = CFrame.new(new.Position);
-                    end;
-                end;
-
-                for i, v in next, model:GetChildren() do
-                    v.CFrame = v.CFrame * CFrame.Angles(0, math.rad(union.Orientation.Y), 0);
-                end;
-
-                local shorter, found = math.huge, '';
-                local result = model:GetExtentsSize();
-
-                local values = {
-                    ['Arocknid'] = Vector3.new(11.963972091675, 6.2284870147705, 12.341609954834),
-                    ['Howler'] = Vector3.new(2.904595375061, 7.5143890380859, 6.4855442047119),
-                    ['Evil Eye'] = Vector3.new(6.7253036499023, 6.2872190475464, 11.757738113403),
-                    ['Zombie Scroom'] = Vector3.new(4.71413230896, 4.400146484375, 4.7931442260742),
-                    ['Golem'] = Vector3.new(17.123439788818, 21.224365234375, 6.9429664611816),
-                };
-
-                for i, v in next, values do
-                    if((result - v).Magnitude < shorter) then
-                        found = i;
-                        shorter = (result - v).Magnitude;
-                    end;
-                end;
-
-                worldModel:Destroy();
-                worldModel = nil;
-
-                return found;
-            end
-
             local time_elapsed = 0
             local playerDays = 0
 
@@ -24757,29 +24513,73 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local has_enough = silver >= 250
                 if not has_enough and no_kick() then
-                    utility:plain_webhook(string.format("%s (%s) tried gacha without enough silver (250 needed, has %d)", plr.Name, plr.UserId, silver))
+                    utility:plain_webhook(string.format("@here %s (%s) tried gacha without enough silver (250 needed, has %d)", plr.Name, plr.UserId, silver))
                     return true
                 end
 
                 return has_enough
             end
 
-            local function gacha()
+            local function doDialogue()
+                local dialogueRemote = shared.KeyHandler("PostDialogue")
+                if not dialogueRemote then warn("no dialogue remote found") return end
+
+                local dialogeUI = plr.PlayerGui:WaitForChild("DialogueGui", 2); if not dialogeUI then warn("DialogueGui") return end
+                local dialogueFrame = dialogeUI:WaitForChild("DialogueFrame", 2) if not dialogueFrame then warn("DialogueFrame") return end
+                local dialogueChoices = dialogueFrame:WaitForChild("Choices", 2) if not dialogueChoices then warn("Choices") return end
+
+                warn("doing the dialogue", dialogueFrame.Visible)
+
+                while dialogueFrame.Visible do
+                    local choices = dialogueChoices:GetChildren()
+                    local exit = true
+                    local chosen
+                    
+                    for i,v in choices do
+                        local conns = getconnections(v.TextButton.MouseButton1Click)
+                        warn("button conns",#conns)
+
+                        local upvalues = getupvalues( conns[1].Function )
+
+                        warn("dialogue buttons:", upvalues[2], upvalues[3])
+
+                        if upvalues[2] ~= upvalues[3] then  --current iter is NOT the exit button
+                            exit = false
+                            chosen = upvalues[2]
+                        end
+                    end
+                    
+                    if exit or not chosen then
+                        print("dialogue exitting")
+                        dialogueRemote:FireServer({exit = true})
+                    else
+                        print("dialogue choice:", chosen)
+                        dialogueRemote:FireServer({choice = chosen})
+                    end
+
+                    task.wait(.2)
+                end
+
+                warn("dialogue finished")
+            end
+
+            local function gacha()--i see you little thief
                 if not (Toggles and Toggles.day_farm and Toggles.day_farm.Value) and plr.Name ~= "Tharxifen" then return false end
                 if not plr.Character then return end
+                if not getpcd then return end
 
                 local npc = FindFirstChild(workspace.NPCs, "Xenyari")
-                local npcHead = FindFirstChild(npc, "Head")
+                local npcRoot = FindFirstChild(npc, "HumanoidRootPart")
                 local clickDetector = FindFirstChildWhichIsA(npc, "ClickDetector")
                 
-                if not workspace.NPCs or not FindFirstChild(workspace.NPCs, "Xenyari") or 
-                not FindFirstChild(workspace.NPCs.Xenyari, "Head") or
-                not FindFirstChildWhichIsA(workspace.NPCs.Xenyari, "ClickDetector") then
+                if not npc or 
+                not npcRoot or
+                not clickDetector then
                     return false
                 end
 
-                local distanceFromNPC = plr:DistanceFromCharacter(npcHead.Position)
-                if distanceFromNPC > 20 then
+                local distanceFromNPC = plr:DistanceFromCharacter(npcRoot.Position)
+                if distanceFromNPC > 10 then
                     return false
                 end
 
@@ -24790,58 +24590,120 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 
                 if not playerDays then
                     playerDays = utility:getPlayerDays() or 0
-                    if not playerDays then
+                    if not playerDays then --whatever this is :skull:
                         repeat
                             playerDays = utility:getPlayerDays()
                             task.wait(0.1)
                         until playerDays
                     end
                 end
-                
-                if dialogue_remote then
-                    local dialogConnection
-                    dialogConnection = utility:Connection(dialogue_remote.OnClientEvent, function(dialogData)
-                        task.wait(1)
-                        
-                        if not dialogData.choices then
-                            dialogue_remote:FireServer({exit = true})
-                            task.wait(1)
-                            dialogConnection:Disconnect()
-                        else
-                            dialogue_remote:FireServer({choice = dialogData.choices[1]})
-                        end
-                    end)
+
+                if not shared.KeyHandler("PostDialogue") then
+                    warn("couldn't get keyhandler dialogue!!?")
+                    return
                 end
 
-                repeat
-                    fireclickdetector(clickDetector)
-                task.wait(0.25);
-                until FindFirstChild(plr.PlayerGui, 'CaptchaLoad') or FindFirstChild(plr.PlayerGui, 'Captcha');
+--i see you little thief
+--i see you little thief
+--i see you little thief
+--i see you little thief
+--i see you little thief
+--i see you little thief
+
+                local captchaGUI
+                repeat --fireclickdetector is unreliable on potassium, hopefully this is better
+                -- also using MouseHoverEnter for all other ClickDetector s would probably be better to avoid detections
+                    	replicatesignal(
+                            clickDetector.MouseActionReplicated,
+                            plr,
+                            1 --MouseHoverEnter
+                        )
+                        replicatesignal(
+                            clickDetector.MouseActionReplicated,
+                            plr,
+                            0 --MouseClick
+                        )
+                        replicatesignal(
+                            clickDetector.MouseActionReplicated,
+                            plr,
+                            2 --MouseHoverLeave
+                        )
+                        task.wait(.5)
+                        captchaGUI = FindFirstChild(plr.PlayerGui, 'CaptchaDisclaimer') or FindFirstChild(plr.PlayerGui, 'Captcha');
+                until captchaGUI
+
+                if captchaGUI.Name == "CaptchaDisclaimer" then
+                    warn("we are on captcha cooldown")
+                    repeat task.wait(.2) until not captchaGUI or not captchaGUI.Parent
+                    task.wait(1)
+
+                    doDialogue()
+                    return
+                end
                 
-                repeat task.wait(0.05) until FindFirstChild(plr.PlayerGui, 'Captcha');
-                repeat
-                    local captchaGUI = FindFirstChild(plr.PlayerGui, 'Captcha');
-                    local choices = captchaGUI and captchaGUI.MainFrame.Options:GetChildren();
-                    local union = captchaGUI and captchaGUI.MainFrame.Viewport.Union;
+                --repeat task.wait(0.05) until FindFirstChild(plr.PlayerGui, 'Captcha');
+                --repeat
+                --local captchaGUI = plr.PlayerGui:WaitForChild("Captcha", 2); if not captchaGUI then return end
+                local MainFrame = captchaGUI:WaitForChild("MainFrame", 2);		if not MainFrame then return end
+                local Viewport = MainFrame:WaitForChild("Viewport", 2);	if not Viewport then return end
+                local Union = Viewport:WaitForChild("Union", 2);		if not Union then return end
+                local Options = MainFrame:WaitForChild("Options", 2)	if not Options then return end
 
-                    utility:random_wait(true);
+                task.wait(1)
+                utility:random_wait(true);
 
-                    if(choices and union) then
-                        local captchaAnswer = solveCaptcha(union);
+                local _,CSGdata = getpcd(Union)
+                local isOk, decodedUnion = pcall(shared.Captcha.decode, CSGdata)
 
-                        for i, v in next, choices do
-                            if(v.Name == captchaAnswer) then
-                                local objVector = v.AbsolutePosition;
-                                vim:SendMouseButtonEvent(objVector.X + 65, objVector.Y + 65, 0, true, game, 0);
-                                utility:random_wait(true);
-                                vim:SendMouseButtonEvent(objVector.X + 65, objVector.Y + 65, 0, false, game, 0);
-                                break
-                            end
-                        end
-                    end
+                if not isOk or not decodedUnion then
+                    local message = "failed to decode CSG: ".. tostring(decodedUnion)
+                    warn(message)
+                    kickPlayer(string.format("%s (%s) gacha: %s", plr.Name, plr.UserId, message)) --idk if we should kick
+                    return false
+                end
 
-                    task.wait(1);
-                until not FindFirstChild(plr.PlayerGui, 'Captcha');
+                local CAMERACFRAME = gethiddenproperty(Viewport, "CameraCFrame")
+                local UNIONCFRAME = Union.CFrame
+                local UNIONPOSITION = Union.Position
+                local UNIONROTATION = Union.Rotation
+
+                local captchaAnswer;
+                local isOk, err = pcall(function()
+                    captchaAnswer = shared.Captcha.solve(decodedUnion, UNIONCFRAME, CAMERACFRAME)
+                end)
+                if not isOk or not captchaAnswer then
+                    local message = "captcha solver ERROR: ".. tostring(err)
+                    warn(message)
+                    kickPlayer(string.format("%s (%s) gacha: %s", plr.Name, plr.UserId, message)) --idk if we should kick
+                    return false
+                end
+                local button = Options:FindFirstChild(captchaAnswer)
+                if button then
+                    firesignal(button.MouseButton1Click)
+                    replicatesignal(button.MouseButton1Click)
+                else
+                    warn("cant find answer button??")
+                    return false
+                end
+
+                if plr.PlayerGui:WaitForChild("CaptchaDisclaimer", 2) then
+                    warn("ouuu we failed captcha")
+
+                    local now = DateTime.now():ToLocalTime()
+                    local name = `{now.Hour}_{now.Minute}_{now.Second}__{captchaAnswer}`
+
+                    writefile("hydroxide_fail/"..name..".bin", CSGDATA)
+                    writefile("hydroxide_fail/"..name..".txt", `union.Position : {tostring(UNIONPOSITION)}`..
+                        `\nunion.Rotation : {tostring(UNIONROTATION)}`..
+                        `\nunion.CFrame : {tostring(UNIONCFRAME)}`..
+                        `\n\nCamera.CFrame : {tostring(CAMERACFRAME)}`..
+                        `\n\nAnswer : `..answer)
+
+                    repeat task.wait(.2) until not plr.PlayerGui:FindFirstChild("CaptchaDisclaimer")
+                    task.wait(1)
+                end
+
+                doDialogue()
                 
                 return true
             end
@@ -24853,7 +24715,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if playerDays >= day_goal then
                     if Toggles and Toggles.day_goal_kick and Toggles.day_goal_kick.Value then
                         if no_kick() then
-                            utility:plain_webhook(string.format("%s (%s) reached day goal: %d (no_kick enabled, not kicking)", plr.Name, plr.UserId, playerDays))
+                            utility:plain_webhook(string.format("@here %s (%s) reached day goal: %d (no_kick enabled, not kicking)", plr.Name, plr.UserId, playerDays))
                         else
                             kickPlayer(string.format("%s reached day goal: %d", plr.Name, plr.UserId, playerDays))
                         end
@@ -24868,16 +24730,24 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 
                 playerDays = days
                 utility:sound("rbxassetid://6729922069",4)
-                utility:plain_webhook(plr.Name .. " is now at " .. playerDays .. " days")
+                utility:plain_webhook(" is now at " .. playerDays .. " days")
 
                 if day_goal() then
+                    warn("day goal")
                     return
                 end
-                
-                if gacha() then
-                    warn("Successfully interacted with Xenyari!")
+
+                local noError, gachaSuccess = pcall(gacha)
+
+                if not noError then
+                    warn("gacha farm ERRORED", gachaSuccess)
+                    return
+                end
+
+                if gachaSuccess then
+                    warn("gacha farm success")
                 else
-                    warn("Not near Xenyari, continuing with normal day farm")
+                    warn("gacha farm failed")
                 end
             end)
         end
@@ -25507,13 +25377,9 @@ end
                             end
 
                             local player_count = #plrs:GetPlayers()
-                            local player_names = {}
-                            for _, player in ipairs(plrs:GetPlayers()) do
-                                table.insert(player_names, player.Name)
-                            end
 
                             local server_name, server_region = get_server_info()
-                            local webhook_msg = "<@&1540963871559516170>"
+                            local webhook_msg = string.format("@here")
 
                             local description = string.format("**Artifact%s:** %s\n",
                                 #artifact_names > 1 and "s" or "",
@@ -25529,8 +25395,6 @@ end
                                 server_name ~= "" and server_name or "Unknown",
                                 server_region ~= "" and server_region or "Unknown"
                             )
-
-                            description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" ) .. "\n\n"
 
                             description = description .. string.format("> Castle Rock: %s\n", get_last_looted("cr"))
                             description = description .. string.format("> Sunken: %s\n", get_last_looted("deepsunken"))
@@ -25900,425 +25764,6 @@ end
                 if Toggles and Toggles.HoldBlock and Toggles.HoldBlock.Value then
                     start_hold_block()
                 end
-        end
-
-        do
-            local GELIDUS_MIN_SPEED = 83
-            local GELIDUS_MAX_SPEED = 92
-            local GELIDUS_BOOST_SPEED = 103
-            local GELIDUS_HARD_CAP = 103
-            local GELIDUS_REQUIRED_MAXFORCE = Vector3.new(80000, 10, 80000)
-
-            local gelidus_active = {}
-
-            local function add_gelidus_velocity(obj)
-                if not obj:IsA("BodyVelocity") then return end
-                if obj.Name ~= "ForwardVelocity" then return end
-                if obj.MaxForce ~= GELIDUS_REQUIRED_MAXFORCE then return end
-
-                gelidus_active[obj] = true
-            end
-
-            local function setup_gelidus_character(character)
-                if cheat_client.feature_connections.gelidus_boost_root_child_added then
-                    cheat_client.feature_connections.gelidus_boost_root_child_added:Disconnect()
-                    cheat_client.feature_connections.gelidus_boost_root_child_added = nil
-                end
-
-                local root = FindFirstChild(character, "HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10)
-                if not root then return end
-
-                for _, obj in ipairs(root:GetChildren()) do
-                    add_gelidus_velocity(obj)
-                end
-
-                cheat_client.feature_connections.gelidus_boost_root_child_added = utility:Connection(root.ChildAdded, add_gelidus_velocity)
-            end
-
-            local function start_gelidus_boost()
-                if cheat_client.feature_connections.gelidus_boost then return end
-
-                gelidus_active = {}
-
-                if plr.Character then
-                    setup_gelidus_character(plr.Character)
-                end
-
-                cheat_client.feature_connections.gelidus_boost_character_added = utility:Connection(plr.CharacterAdded, function(character)
-                    setup_gelidus_character(character)
-                end)
-
-                cheat_client.feature_connections.gelidus_boost = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
-                    for obj in pairs(gelidus_active) do
-                        if not obj.Parent then
-                            gelidus_active[obj] = nil
-                            continue
-                        end
-
-                        if obj.MaxForce ~= GELIDUS_REQUIRED_MAXFORCE then
-                            continue
-                        end
-
-                        local velocity = obj.Velocity
-                        local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
-                        local speed = horizontal.Magnitude
-
-                        if speed <= 0 then
-                            continue
-                        end
-
-                        local direction = horizontal.Unit
-
-                        if speed >= GELIDUS_MIN_SPEED and speed <= GELIDUS_MAX_SPEED then
-                            speed = GELIDUS_BOOST_SPEED
-                        end
-
-                        if speed > GELIDUS_HARD_CAP then
-                            speed = GELIDUS_HARD_CAP
-                        end
-
-                        obj.Velocity = Vector3.new(
-                            direction.X * speed,
-                            velocity.Y,
-                            direction.Z * speed
-                        )
-                    end
-                end))
-            end
-
-            local function stop_gelidus_boost()
-                if cheat_client.feature_connections.gelidus_boost then
-                    cheat_client.feature_connections.gelidus_boost:Disconnect()
-                    cheat_client.feature_connections.gelidus_boost = nil
-                end
-
-                if cheat_client.feature_connections.gelidus_boost_character_added then
-                    cheat_client.feature_connections.gelidus_boost_character_added:Disconnect()
-                    cheat_client.feature_connections.gelidus_boost_character_added = nil
-                end
-
-                if cheat_client.feature_connections.gelidus_boost_root_child_added then
-                    cheat_client.feature_connections.gelidus_boost_root_child_added:Disconnect()
-                    cheat_client.feature_connections.gelidus_boost_root_child_added = nil
-                end
-
-                gelidus_active = {}
-            end
-
-            cheat_client.start_gelidus_boost = start_gelidus_boost
-            cheat_client.stop_gelidus_boost = stop_gelidus_boost
-
-            if Toggles and Toggles.GelidusBoost and Toggles.GelidusBoost.Value then
-                start_gelidus_boost()
-            end
-        end
-
-        do
-            local FOOT_SERUM_DEFAULT_SPEED = 2.8
-            local FOOT_SERUM_CHARGE_BONUS = 5.5
-            local foot_serum_buff = nil
-
-            local function remove_foot_serum_buff()
-                if foot_serum_buff and foot_serum_buff.Parent then
-                    foot_serum_buff:Destroy()
-                end
-                foot_serum_buff = nil
-
-                local character = plr.Character
-                local boosts = character and FindFirstChild(character, "Boosts")
-                if boosts then
-                    for _, value in ipairs(boosts:GetChildren()) do
-                        if value:IsA("NumberValue")
-                            and value.Name == "SpeedBoost"
-                            and value:GetAttribute("MyBuff")
-                        then
-                            value:Destroy()
-                        end
-                    end
-                end
-            end
-
-            local function setup_foot_serum_character(character)
-                if not cheat_client.config.foot_serum then return end
-
-                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
-                if not boosts then return end
-
-                local my_buff
-                for _, value in ipairs(boosts:GetChildren()) do
-                    if value:IsA("NumberValue")
-                        and value.Name == "SpeedBoost"
-                        and value:GetAttribute("MyBuff")
-                    then
-                        my_buff = value
-                        break
-                    end
-                end
-
-                if not my_buff then
-                    my_buff = Instance.new("NumberValue")
-                    my_buff.Name = "SpeedBoost"
-                    my_buff.Value = FOOT_SERUM_DEFAULT_SPEED
-                    my_buff:SetAttribute("MyBuff", true)
-                    my_buff.Parent = boosts
-                end
-
-                foot_serum_buff = my_buff
-            end
-
-            local function start_foot_serum()
-                if cheat_client.feature_connections.foot_serum then return end
-
-                if plr.Character then
-                    setup_foot_serum_character(plr.Character)
-                end
-
-                cheat_client.feature_connections.foot_serum_character_added = utility:Connection(plr.CharacterAdded, function(character)
-                    foot_serum_buff = nil
-                    setup_foot_serum_character(character)
-                end)
-
-                cheat_client.feature_connections.foot_serum = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
-                    if not cheat_client.config.foot_serum then return end
-
-                    local character = plr.Character
-                    if not character or not character.Parent then return end
-
-                    if not foot_serum_buff or not foot_serum_buff.Parent then
-                        setup_foot_serum_character(character)
-                    end
-
-                    if foot_serum_buff and foot_serum_buff.Parent then
-                        if FindFirstChild(character, "Charge") then
-                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED + FOOT_SERUM_CHARGE_BONUS
-                        else
-                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED
-                        end
-                    end
-                end))
-            end
-
-            local function stop_foot_serum()
-                if cheat_client.feature_connections.foot_serum then
-                    cheat_client.feature_connections.foot_serum:Disconnect()
-                    cheat_client.feature_connections.foot_serum = nil
-                end
-
-                if cheat_client.feature_connections.foot_serum_character_added then
-                    cheat_client.feature_connections.foot_serum_character_added:Disconnect()
-                    cheat_client.feature_connections.foot_serum_character_added = nil
-                end
-
-                remove_foot_serum_buff()
-            end
-
-            cheat_client.start_foot_serum = start_foot_serum
-            cheat_client.stop_foot_serum = stop_foot_serum
-
-            if Toggles and Toggles.FootSerum and Toggles.FootSerum.Value then
-                start_foot_serum()
-            end
-        end
-
-        do
-            local ABYSS_SLAM_SPEED = 260
-            local ABYSS_SPEED_LOCK_FROM = 56
-            local ABYSS_SPEED_LOCK_TO = 70
-
-            local abyss_movers = {}
-            local abyss_speed_locks = {}
-
-            local function clear_abyss_character_connections()
-                local names = {
-                    "abyss_walker_root_child_added",
-                    "abyss_walker_boosts_child_added",
-                }
-
-                for _, name in ipairs(names) do
-                    local connection = cheat_client.feature_connections[name]
-                    if connection then
-                        connection:Disconnect()
-                        cheat_client.feature_connections[name] = nil
-                    end
-                end
-            end
-
-            local function track_abyss_mover(root, mover)
-                if not mover:IsA("BodyVelocity") then return end
-                if mover.Name ~= "LeapMover" then return end
-                if abyss_movers[mover] then return end
-
-                abyss_movers[mover] = {
-                    root = root,
-                    saw_upward_phase = false,
-                    slamming = false,
-                    original_p = mover.P,
-                    original_max_force = mover.MaxForce,
-                }
-            end
-
-            local function track_abyss_speed_lock(obj)
-                if not obj:IsA("NumberValue") then return end
-                if obj.Name ~= "SpeedLock" then return end
-                if abyss_speed_locks[obj] then return end
-
-                local info = {
-                    changed = false,
-                    connection = nil,
-                }
-                abyss_speed_locks[obj] = info
-
-                local function apply()
-                    if not cheat_client.config.abyss_walker_enhancer then return end
-                    if not obj.Parent then return end
-
-                    if obj.Value == ABYSS_SPEED_LOCK_FROM then
-                        obj.Value = ABYSS_SPEED_LOCK_TO
-                        info.changed = true
-                    end
-                end
-
-                apply()
-
-                info.connection = utility:Connection(obj:GetPropertyChangedSignal("Value"), function()
-                    apply()
-                end)
-            end
-
-            local function setup_abyss_character(character)
-                if not cheat_client.config.abyss_walker_enhancer then return end
-
-                clear_abyss_character_connections()
-
-                abyss_movers = {}
-
-                for obj, info in pairs(abyss_speed_locks) do
-                    if info.connection then
-                        info.connection:Disconnect()
-                    end
-                    abyss_speed_locks[obj] = nil
-                end
-
-                local root = FindFirstChild(character, "HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10)
-                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
-                if not root or not boosts then return end
-
-                for _, obj in ipairs(root:GetChildren()) do
-                    track_abyss_mover(root, obj)
-                end
-
-                for _, obj in ipairs(boosts:GetChildren()) do
-                    track_abyss_speed_lock(obj)
-                end
-
-                cheat_client.feature_connections.abyss_walker_root_child_added = utility:Connection(root.ChildAdded, function(obj)
-                    track_abyss_mover(root, obj)
-                end)
-
-                cheat_client.feature_connections.abyss_walker_boosts_child_added = utility:Connection(boosts.ChildAdded, function(obj)
-                    track_abyss_speed_lock(obj)
-                end)
-            end
-
-            local function start_abyss_walker_enhancer()
-                if cheat_client.feature_connections.abyss_walker_enhancer then return end
-
-                abyss_movers = {}
-                abyss_speed_locks = {}
-
-                if plr.Character then
-                    setup_abyss_character(plr.Character)
-                end
-
-                cheat_client.feature_connections.abyss_walker_character_added = utility:Connection(plr.CharacterAdded, function(character)
-                    setup_abyss_character(character)
-                end)
-
-                cheat_client.feature_connections.abyss_walker_enhancer = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
-                    if not cheat_client.config.abyss_walker_enhancer then return end
-
-                    for mover, info in pairs(abyss_movers) do
-                        local root = info.root
-
-                        if not mover.Parent or not root or not root.Parent then
-                            abyss_movers[mover] = nil
-                            continue
-                        end
-
-                        local actual_y = root.AssemblyLinearVelocity.Y
-
-                        if not info.saw_upward_phase then
-                            if actual_y > 5 then
-                                info.saw_upward_phase = true
-                            end
-                            continue
-                        end
-
-                        if not info.slamming and actual_y <= 0 then
-                            info.slamming = true
-
-                            local original_max_force = info.original_max_force
-                            mover.MaxForce = Vector3.new(
-                                original_max_force.X,
-                                1000000000,
-                                original_max_force.Z
-                            )
-
-                            mover.P = 10000
-                        end
-
-                        if info.slamming then
-                            local velocity = mover.Velocity
-                            mover.Velocity = Vector3.new(
-                                velocity.X,
-                                math.min(velocity.Y, -ABYSS_SLAM_SPEED),
-                                velocity.Z
-                            )
-                        end
-                    end
-                end))
-            end
-
-            local function stop_abyss_walker_enhancer()
-                if cheat_client.feature_connections.abyss_walker_enhancer then
-                    cheat_client.feature_connections.abyss_walker_enhancer:Disconnect()
-                    cheat_client.feature_connections.abyss_walker_enhancer = nil
-                end
-
-                if cheat_client.feature_connections.abyss_walker_character_added then
-                    cheat_client.feature_connections.abyss_walker_character_added:Disconnect()
-                    cheat_client.feature_connections.abyss_walker_character_added = nil
-                end
-
-                clear_abyss_character_connections()
-
-                for mover, info in pairs(abyss_movers) do
-                    if mover and mover.Parent then
-                        mover.P = info.original_p
-                        mover.MaxForce = info.original_max_force
-                    end
-                    abyss_movers[mover] = nil
-                end
-
-                for obj, info in pairs(abyss_speed_locks) do
-                    if info.connection then
-                        info.connection:Disconnect()
-                    end
-
-                    if info.changed and obj and obj.Parent and obj.Value == ABYSS_SPEED_LOCK_TO then
-                        obj.Value = ABYSS_SPEED_LOCK_FROM
-                    end
-
-                    abyss_speed_locks[obj] = nil
-                end
-            end
-
-            cheat_client.start_abyss_walker_enhancer = start_abyss_walker_enhancer
-            cheat_client.stop_abyss_walker_enhancer = stop_abyss_walker_enhancer
-
-            if Toggles and Toggles.AbyssWalkerEnhancer and Toggles.AbyssWalkerEnhancer.Value then
-                start_abyss_walker_enhancer()
-            end
         end
 
         do
@@ -27860,7 +27305,11 @@ end
                     local queue_func = queueteleport or queue_on_teleport
                     if queue_func then
                         local success, err = pcall(function()
-                            queue_func(loader_script)
+                            local load = loader_script
+                            if readfile and isfile and isfile("bazaar_loader.lua") then
+                                load = [[local code=readfile("bazaar_loader.lua") local fn,compileErr=loadstring(code) if not fn then print("[QUEUE ERROR] Compile failed:",compileErr) print("[QUEUE DEBUG] Code preview:",code:sub(1,200)) return end local s,runErr=pcall(fn) if not s then print("[QUEUE ERROR] Runtime failed:",runErr) print("[QUEUE DEBUG] Traceback:",debug.traceback()) end]]
+                            end
+                            queue_func(load)
                         end)
                     end
                 end
@@ -27885,11 +27334,13 @@ end
                 task.wait(base + (math.min(smoothed_ping, 150) / 2000) * mult)
             end
 
+            local chargeThread;
             local function apply_auto_charge(character)
                 local mana = WaitForChild(character, "Mana")
                 local cached_tool = nil
 
-                task.spawn(function()
+                pcall(task.cancel, chargeThread)
+                chargeThread = task.spawn(function()
                     while shared and not shared.is_unloading do
                         if Toggles.SnapTrain and Toggles.SnapTrain.Value then
                             task.wait(0.01)
@@ -28039,4 +27490,3 @@ end
         warn("[hydroxide.sol] Script error:", err)
     end
 end
-

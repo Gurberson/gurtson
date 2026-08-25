@@ -459,6 +459,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             hold_block_delay = 0,
             no_stun = false,
             gelidus_boost = false,
+            foot_serum = false,
             anti_confusion = false,
 
             auto_perfect_block = false,
@@ -7438,6 +7439,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.gelidus_boost
             })
 
+            group_combat_utils:AddToggle("FootSerum", {
+                Text = "Foot Serum",
+                Default = cheat_client.config.foot_serum
+            })
+
             group_combat_utils:AddDivider()
 
             group_combat_utils:AddLabel("Attach to Back"):AddKeyPicker("AttachToBackKeybind", {
@@ -7621,6 +7627,21 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     if cheat_client.stop_gelidus_boost then
                         cheat_client.stop_gelidus_boost()
+                    end
+                end
+            end)
+
+            Toggles.FootSerum:OnChanged(function()
+                local value = Toggles.FootSerum.Value
+                cheat_client.config.foot_serum = value
+
+                if value then
+                    if cheat_client.start_foot_serum then
+                        cheat_client.start_foot_serum()
+                    end
+                else
+                    if cheat_client.stop_foot_serum then
+                        cheat_client.stop_foot_serum()
                     end
                 end
             end)
@@ -25749,6 +25770,113 @@ end
 
             if Toggles and Toggles.GelidusBoost and Toggles.GelidusBoost.Value then
                 start_gelidus_boost()
+            end
+        end
+
+        do
+            local FOOT_SERUM_DEFAULT_SPEED = 2.8
+            local FOOT_SERUM_CHARGE_BONUS = 5.5
+            local foot_serum_buff = nil
+
+            local function remove_foot_serum_buff()
+                if foot_serum_buff and foot_serum_buff.Parent then
+                    foot_serum_buff:Destroy()
+                end
+                foot_serum_buff = nil
+
+                local character = plr.Character
+                local boosts = character and FindFirstChild(character, "Boosts")
+                if boosts then
+                    for _, value in ipairs(boosts:GetChildren()) do
+                        if value:IsA("NumberValue")
+                            and value.Name == "SpeedBoost"
+                            and value:GetAttribute("MyBuff")
+                        then
+                            value:Destroy()
+                        end
+                    end
+                end
+            end
+
+            local function setup_foot_serum_character(character)
+                if not cheat_client.config.foot_serum then return end
+
+                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
+                if not boosts then return end
+
+                local my_buff
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value:IsA("NumberValue")
+                        and value.Name == "SpeedBoost"
+                        and value:GetAttribute("MyBuff")
+                    then
+                        my_buff = value
+                        break
+                    end
+                end
+
+                if not my_buff then
+                    my_buff = Instance.new("NumberValue")
+                    my_buff.Name = "SpeedBoost"
+                    my_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                    my_buff:SetAttribute("MyBuff", true)
+                    my_buff.Parent = boosts
+                end
+
+                foot_serum_buff = my_buff
+            end
+
+            local function start_foot_serum()
+                if cheat_client.feature_connections.foot_serum then return end
+
+                if plr.Character then
+                    setup_foot_serum_character(plr.Character)
+                end
+
+                cheat_client.feature_connections.foot_serum_character_added = utility:Connection(plr.CharacterAdded, function(character)
+                    foot_serum_buff = nil
+                    setup_foot_serum_character(character)
+                end)
+
+                cheat_client.feature_connections.foot_serum = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
+                    if not cheat_client.config.foot_serum then return end
+
+                    local character = plr.Character
+                    if not character or not character.Parent then return end
+
+                    if not foot_serum_buff or not foot_serum_buff.Parent then
+                        setup_foot_serum_character(character)
+                    end
+
+                    if foot_serum_buff and foot_serum_buff.Parent then
+                        if FindFirstChild(character, "Charge") then
+                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED + FOOT_SERUM_CHARGE_BONUS
+                        else
+                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                        end
+                    end
+                end))
+            end
+
+            local function stop_foot_serum()
+                if cheat_client.feature_connections.foot_serum then
+                    cheat_client.feature_connections.foot_serum:Disconnect()
+                    cheat_client.feature_connections.foot_serum = nil
+                end
+
+                if cheat_client.feature_connections.foot_serum_character_added then
+                    cheat_client.feature_connections.foot_serum_character_added:Disconnect()
+                    cheat_client.feature_connections.foot_serum_character_added = nil
+                end
+
+                remove_foot_serum_buff()
+            end
+
+            cheat_client.start_foot_serum = start_foot_serum
+            cheat_client.stop_foot_serum = stop_foot_serum
+
+            if Toggles and Toggles.FootSerum and Toggles.FootSerum.Value then
+                start_foot_serum()
             end
         end
 

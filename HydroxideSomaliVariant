@@ -459,7 +459,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             hold_block_delay = 0,
             no_stun = false,
             gelidus_boost = false,
+            gelidus_boost_value = 103,
             foot_serum = false,
+            foot_serum_base_value = 2.8,
             abyss_walker_enhancer = false,
             anti_confusion = false,
 
@@ -7444,9 +7446,33 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.gelidus_boost
             })
 
+            group_combat_utils:AddSlider("GelidusBoostValue", {
+                Text = "Gelidus Speed",
+                Default = cheat_client.config.gelidus_boost_value or 103,
+                Min = 90,
+                Max = 400,
+                Rounding = 0,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.gelidus_boost_value = value
+                end
+            })
+
             group_combat_utils:AddToggle("FootSerum", {
                 Text = "Foot Serum",
                 Default = cheat_client.config.foot_serum
+            })
+
+            group_combat_utils:AddSlider("FootSerumBaseValue", {
+                Text = "Foot Serum Base",
+                Default = cheat_client.config.foot_serum_base_value or 2.8,
+                Min = 1.0,
+                Max = 25.0,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.foot_serum_base_value = value
+                end
             })
 
             group_combat_utils:AddToggle("AbyssWalkerEnhancer", {
@@ -21844,20 +21870,35 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 if arg2Keys > 0 then break end
                             end
 
-                            local is_fall_shape = arg1Keys == 2
-                                and arg2Keys == 0
-                                and typeof(args[1][1]) == "number"
-                                and typeof(args[1][2]) == "number"
+                            local isKheiPlace = game.PlaceId == 3541987450 or game.PlaceId == 14341521240
+                            local severityIndex = nil
 
-                            if is_fall_shape then
+                            if isKheiPlace then
+                                if arg1Keys == 1
+                                    and arg2Keys == 0
+                                    and typeof(args[1][1]) == "number"
+                                then
+                                    severityIndex = 1
+                                end
+                            else
+                                if arg1Keys == 2
+                                    and arg2Keys == 0
+                                    and typeof(args[1][1]) == "number"
+                                    and typeof(args[1][2]) == "number"
+                                then
+                                    severityIndex = 2
+                                end
+                            end
+
+                            if severityIndex then
                                 local fallData = args[1]
-                                local originalSeverity = fallData[2]
+                                local originalSeverity = fallData[severityIndex]
                                 local reductionPercent = math.clamp(cheat_client.config.fall_damage_reduction or 0, 0, 100)
                                 local multiplier = 1 - (reductionPercent / 100)
                                 local reducedSeverity = originalSeverity * multiplier
 
                                 local changed = pcall(function()
-                                    fallData[2] = reducedSeverity
+                                    fallData[severityIndex] = reducedSeverity
                                 end)
 
                                 if changed then
@@ -21866,7 +21907,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     end)
 
                                     pcall(function()
-                                        fallData[2] = originalSeverity
+                                        fallData[severityIndex] = originalSeverity
                                     end)
 
                                     return
@@ -25905,8 +25946,7 @@ end
         do
             local GELIDUS_MIN_SPEED = 83
             local GELIDUS_MAX_SPEED = 92
-            local GELIDUS_BOOST_SPEED = 103
-            local GELIDUS_HARD_CAP = 103
+            local GELIDUS_DEFAULT_SPEED = 103
             local GELIDUS_REQUIRED_MAXFORCE = Vector3.new(80000, 10, 80000)
 
             local gelidus_active = {}
@@ -25968,13 +26008,15 @@ end
                         end
 
                         local direction = horizontal.Unit
+                        local gelidus_speed = tonumber(cheat_client.config.gelidus_boost_value) or GELIDUS_DEFAULT_SPEED
+                        gelidus_speed = math.clamp(gelidus_speed, 90, 400)
 
                         if speed >= GELIDUS_MIN_SPEED and speed <= GELIDUS_MAX_SPEED then
-                            speed = GELIDUS_BOOST_SPEED
+                            speed = gelidus_speed
                         end
 
-                        if speed > GELIDUS_HARD_CAP then
-                            speed = GELIDUS_HARD_CAP
+                        if speed > gelidus_speed then
+                            speed = gelidus_speed
                         end
 
                         obj.Velocity = Vector3.new(
@@ -26058,7 +26100,7 @@ end
                 if not my_buff then
                     my_buff = Instance.new("NumberValue")
                     my_buff.Name = "SpeedBoost"
-                    my_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                    my_buff.Value = math.clamp(tonumber(cheat_client.config.foot_serum_base_value) or 2.8, 1.0, 25.0)
                     my_buff:SetAttribute("MyBuff", true)
                     my_buff.Parent = boosts
                 end
@@ -26090,9 +26132,11 @@ end
 
                     if foot_serum_buff and foot_serum_buff.Parent then
                         if FindFirstChild(character, "Charge") then
+                            -- Keep charged Foot Serum exactly as before: 2.8 + 5.5 = 8.3.
                             foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED + FOOT_SERUM_CHARGE_BONUS
                         else
-                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                            -- Slider only controls the normal/base Foot Serum value.
+                            foot_serum_buff.Value = math.clamp(tonumber(cheat_client.config.foot_serum_base_value) or 2.8, 1.0, 25.0)
                         end
                     end
                 end))

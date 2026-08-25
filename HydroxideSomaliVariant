@@ -567,6 +567,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             auto_fall = false,
             flight_speed = 100,
             better_flight = false,
+            climb_boost = false,
+            climb_boost_value = 0.5,
 
             auto_dialogue = false,
             auto_bard = false,
@@ -8821,6 +8823,28 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
                     cheat_client.config.speed_boost_value = value
+                end
+            })
+
+            group_movement:AddDivider()
+
+            group_movement:AddToggle("climb_boost", {
+                Text = "ClimbBoost",
+                Default = cheat_client.config.climb_boost or false,
+                Callback = function(value)
+                    cheat_client.config.climb_boost = value
+                end
+            })
+
+            group_movement:AddSlider("climb_boost_value", {
+                Text = "Climb",
+                Default = cheat_client.config.climb_boost_value or 2.1,
+                Min = 0.1,
+                Max = 10,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.climb_boost_value = value
                 end
             })
         end
@@ -22208,6 +22232,124 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end)
             end
         end
+
+        do
+            local climb_buff = nil
+            local climb_character_connection = nil
+
+            local function remove_climb_buff()
+                if climb_buff and climb_buff.Parent then
+                    climb_buff:Destroy()
+                end
+                climb_buff = nil
+
+                local character = plr.Character
+                local boosts = character and FindFirstChild(character, "Boosts")
+                if boosts then
+                    for _, value in ipairs(boosts:GetChildren()) do
+                        if value:IsA("NumberValue")
+                            and value.Name == "ClimbBoost"
+                            and value:GetAttribute("MyClimbBuff")
+                        then
+                            value:Destroy()
+                        end
+                    end
+                end
+            end
+
+            local function apply_climb_boost(character)
+                if not cheat_client.config.climb_boost then
+                    return
+                end
+
+                if not character then
+                    return
+                end
+
+                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
+                if not boosts then
+                    return
+                end
+
+                local my_buff
+
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value:IsA("NumberValue")
+                        and value.Name == "ClimbBoost"
+                        and value:GetAttribute("MyClimbBuff")
+                    then
+                        my_buff = value
+                        break
+                    end
+                end
+
+                if not my_buff then
+                    my_buff = Instance.new("NumberValue")
+                    my_buff.Name = "ClimbBoost"
+                    my_buff:SetAttribute("MyClimbBuff", true)
+                    my_buff.Parent = boosts
+                end
+
+                climb_buff = my_buff
+                climb_buff.Value = cheat_client.config.climb_boost_value or 2.1
+            end
+
+            local function start_climb_boost()
+                if climb_character_connection then
+                    return
+                end
+
+                if plr.Character then
+                    apply_climb_boost(plr.Character)
+                end
+
+                climb_character_connection = utility:Connection(plr.CharacterAdded, function(character)
+                    climb_buff = nil
+                    apply_climb_boost(character)
+                end)
+            end
+
+            local function stop_climb_boost()
+                if climb_character_connection then
+                    climb_character_connection:Disconnect()
+                    climb_character_connection = nil
+                end
+
+                remove_climb_buff()
+            end
+
+            if Toggles.climb_boost then
+                Toggles.climb_boost:OnChanged(function()
+                    local enabled = Toggles.climb_boost.Value
+                    cheat_client.config.climb_boost = enabled
+
+                    if enabled then
+                        start_climb_boost()
+                    else
+                        stop_climb_boost()
+                    end
+                end)
+            end
+
+            if Options.climb_boost_value then
+                Options.climb_boost_value:OnChanged(function()
+                    local value = Options.climb_boost_value.Value
+                    cheat_client.config.climb_boost_value = value
+
+                    if Toggles.climb_boost and Toggles.climb_boost.Value then
+                        if climb_buff and climb_buff.Parent then
+                            climb_buff.Value = value
+                        elseif plr.Character then
+                            apply_climb_boost(plr.Character)
+                        end
+                    end
+                end)
+            end
+
+            if Toggles.climb_boost and Toggles.climb_boost.Value then
+                start_climb_boost()
+            end
+        end
     
         do
             do
@@ -25902,7 +26044,7 @@ end
         end
 
         do
-            local ABYSS_SLAM_SPEED = 290
+            local ABYSS_SLAM_SPEED = 260
             local ABYSS_SPEED_LOCK_FROM = 56
             local ABYSS_SPEED_LOCK_TO = 70
 

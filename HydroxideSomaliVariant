@@ -7452,7 +7452,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Min = 90,
                 Max = 400,
                 Rounding = 0,
-                Compact = false,
+                Compact = true,
                 Callback = function(value)
                     cheat_client.config.gelidus_boost_value = value
                 end
@@ -7469,7 +7469,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Min = 1.0,
                 Max = 25.0,
                 Rounding = 1,
-                Compact = false,
+                Compact = true,
                 Callback = function(value)
                     cheat_client.config.foot_serum_base_value = value
                 end

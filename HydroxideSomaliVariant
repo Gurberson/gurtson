@@ -22320,7 +22320,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
 
-                    if obj.Name == "SpeedBoost" and Toggles and Toggles.NoStun and Toggles.NoStun.Value then
+                    if obj.Name == "SpeedBoost"
+                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                        and not obj:GetAttribute("FootSerumBuff")
+                        and not obj:GetAttribute("MyBuff")
+                    then
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -22776,7 +22780,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
 
-                    if obj.Name == "SpeedBoost" and Toggles and Toggles.NoStun and Toggles.NoStun.Value  then
+                    if obj.Name == "SpeedBoost"
+                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                        and not obj:GetAttribute("FootSerumBuff")
+                        and not obj:GetAttribute("MyBuff")
+                    then
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -26102,7 +26110,12 @@ end
                     my_buff.Name = "SpeedBoost"
                     my_buff.Value = math.clamp(tonumber(cheat_client.config.foot_serum_base_value) or 2.8, 1.0, 25.0)
                     my_buff:SetAttribute("MyBuff", true)
+                    my_buff:SetAttribute("FootSerumBuff", true)
                     my_buff.Parent = boosts
+                end
+
+                if my_buff then
+                    my_buff:SetAttribute("FootSerumBuff", true)
                 end
 
                 foot_serum_buff = my_buff

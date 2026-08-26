@@ -13861,6 +13861,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     if detected_class then
                         table.insert(player_names, string.format("%s (%s)", player.Name, detected_class))
+                    else
+                        table.insert(player_names, player.Name)
                     end
                 end
 
@@ -25588,6 +25590,8 @@ end
 
                                 if detected_class then
                                     table.insert(player_names, string.format("%s (%s)", player.Name, detected_class))
+                                else
+                                    table.insert(player_names, player.Name)
                                 end
                             end
 

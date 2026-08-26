@@ -1,3 +1,5 @@
+-- credits to the Hydroxide Team and ChatGPT
+
 if not game:IsLoaded() then
     game.Loaded:Wait()
 end
@@ -456,6 +458,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             hold_block = false,
             hold_block_delay = 0,
             no_stun = false,
+            gelidus_boost = false,
+            gelidus_boost_value = 103,
+            foot_serum = false,
             anti_confusion = false,
 
             auto_perfect_block = false,
@@ -562,6 +567,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             auto_fall = false,
             flight_speed = 100,
             better_flight = false,
+            climb_boost = false,
+            climb_boost_value = 2.1,
 
             auto_dialogue = false,
             auto_bard = false,
@@ -582,6 +589,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             temperature_lock = false,
             textures = false,
             no_fall = false,
+            fall_damage_reducer = false,
+            fall_damage_reduction = 95,
             no_killbrick = false,
             no_mob_trigger = false,
             freecam = false,
@@ -7430,6 +7439,28 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.perflora_teleport
             })
 
+            group_combat_utils:AddToggle("GelidusBoost", {
+                Text = "Gelidus Boost",
+                Default = cheat_client.config.gelidus_boost
+            })
+
+            group_combat_utils:AddSlider("GelidusBoostValue", {
+                Text = "Gelidus Speed",
+                Default = cheat_client.config.gelidus_boost_value or 103,
+                Min = 90,
+                Max = 400,
+                Rounding = 0,
+                Compact = true,
+                Callback = function(value)
+                    cheat_client.config.gelidus_boost_value = value
+                end
+            })
+
+            group_combat_utils:AddToggle("FootSerum", {
+                Text = "Foot Serum",
+                Default = cheat_client.config.foot_serum
+            })
+
             group_combat_utils:AddDivider()
 
             group_combat_utils:AddLabel("Attach to Back"):AddKeyPicker("AttachToBackKeybind", {
@@ -7598,6 +7629,36 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     if cheat_client.stop_perflora_teleport then
                         cheat_client.stop_perflora_teleport()
+                    end
+                end
+            end)
+
+            Toggles.GelidusBoost:OnChanged(function()
+                local value = Toggles.GelidusBoost.Value
+                cheat_client.config.gelidus_boost = value
+
+                if value then
+                    if cheat_client.start_gelidus_boost then
+                        cheat_client.start_gelidus_boost()
+                    end
+                else
+                    if cheat_client.stop_gelidus_boost then
+                        cheat_client.stop_gelidus_boost()
+                    end
+                end
+            end)
+
+            Toggles.FootSerum:OnChanged(function()
+                local value = Toggles.FootSerum.Value
+                cheat_client.config.foot_serum = value
+
+                if value then
+                    if cheat_client.start_foot_serum then
+                        cheat_client.start_foot_serum()
+                    end
+                else
+                    if cheat_client.stop_foot_serum then
+                        cheat_client.stop_foot_serum()
                     end
                 end
             end)
@@ -8287,6 +8348,27 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_character = Tabs.Exploits:AddLeftGroupbox("Character")
             local group_camera = Tabs.Exploits:AddRightGroupbox("Camera")
             local group_exploits = Tabs.Exploits:AddRightGroupbox("Exploits")
+
+            group_exploits:AddToggle("fall_damage_reducer", {
+                Text = "Fall Damage Reducer",
+                Default = cheat_client.config.fall_damage_reducer,
+                Callback = function(value)
+                    cheat_client.config.fall_damage_reducer = value
+                end
+            })
+
+            group_exploits:AddSlider("fall_damage_reduction", {
+                Text = "Fall Damage Reduction %",
+                Default = cheat_client.config.fall_damage_reduction,
+                Min = 0,
+                Max = 100,
+                Rounding = 1,
+                Callback = function(value)
+                    cheat_client.config.fall_damage_reduction = value
+                end
+            })
+
+            group_exploits:AddDivider()
     
             do
                 group_character:AddToggle("instant_mine", {
@@ -8756,6 +8838,28 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
                     cheat_client.config.speed_boost_value = value
+                end
+            })
+
+            group_movement:AddDivider()
+
+            group_movement:AddToggle("climb_boost", {
+                Text = "ClimbBoost",
+                Default = cheat_client.config.climb_boost or false,
+                Callback = function(value)
+                    cheat_client.config.climb_boost = value
+                end
+            })
+
+            group_movement:AddSlider("climb_boost_value", {
+                Text = "Climb",
+                Default = cheat_client.config.climb_boost_value or 2.1,
+                Min = 0.1,
+                Max = 10,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.climb_boost_value = value
                 end
             })
         end
@@ -16733,7 +16837,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             group_trinket_bot:AddDropdown("EmergencyServerhopConditions", {
                 Text = "Emergency Serverhop Conditions",
                 Tooltip = "Select items that trigger instant serverhop when equipped by another player (no emergency gate)",
-                Values = {"Perflora", "Pebble", "Celeritas"},
+                Values = {"Perflora", "Pebble", "Celeritas", "Opal Shard"},
                 Multi = true,
                 Default = {"Perflora", "Pebble", "Celeritas"},
                 Compact = true
@@ -21704,8 +21808,77 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     if shared and remotes_folder and Event.Parent == remotes_folder then
                         local no_fall_enabled = (Toggles and Toggles.no_fall and Toggles.no_fall.Value) or (trinket_bot and trinket_bot.path_running)
+
+                        -- Preserve the original No Fall behavior.
                         if no_fall_enabled and #args == 2 and typeof(args[2]) == "table" then
                             return
+                        end
+
+                        local reducer_enabled = Toggles
+                            and Toggles.fall_damage_reducer
+                            and Toggles.fall_damage_reducer.Value
+
+                        if reducer_enabled
+                            and #args == 2
+                            and typeof(args[1]) == "table"
+                            and typeof(args[2]) == "table"
+                        then
+                            local arg1Keys = 0
+                            local arg2Keys = 0
+
+                            for _ in pairs(args[1]) do
+                                arg1Keys += 1
+                                if arg1Keys > 2 then break end
+                            end
+
+                            for _ in pairs(args[2]) do
+                                arg2Keys += 1
+                                if arg2Keys > 0 then break end
+                            end
+
+                            local isKheiPlace = game.PlaceId == 3541987450 or game.PlaceId == 14341521240
+                            local severityIndex = nil
+
+                            if isKheiPlace then
+                                if arg1Keys == 1
+                                    and arg2Keys == 0
+                                    and typeof(args[1][1]) == "number"
+                                then
+                                    severityIndex = 1
+                                end
+                            else
+                                if arg1Keys == 2
+                                    and arg2Keys == 0
+                                    and typeof(args[1][1]) == "number"
+                                    and typeof(args[1][2]) == "number"
+                                then
+                                    severityIndex = 2
+                                end
+                            end
+
+                            if severityIndex then
+                                local fallData = args[1]
+                                local originalSeverity = fallData[severityIndex]
+                                local reductionPercent = math.clamp(cheat_client.config.fall_damage_reduction or 0, 0, 100)
+                                local multiplier = 1 - (reductionPercent / 100)
+                                local reducedSeverity = originalSeverity * multiplier
+
+                                local changed = pcall(function()
+                                    fallData[severityIndex] = reducedSeverity
+                                end)
+
+                                if changed then
+                                    pcall(function()
+                                        old_remote(Event, table.unpack(args))
+                                    end)
+
+                                    pcall(function()
+                                        fallData[severityIndex] = originalSeverity
+                                    end)
+
+                                    return
+                                end
+                            end
                         end
                     end
                     
@@ -22113,7 +22286,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
 
-                    if obj.Name == "SpeedBoost" and Toggles and Toggles.NoStun and Toggles.NoStun.Value then
+                    if obj.Name == "SpeedBoost"
+                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                        and not obj:GetAttribute("FootSerumBuff")
+                        and not obj:GetAttribute("MyBuff")
+                    then
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -22141,6 +22318,124 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         speed_object.Value = Options.speed_boost_value.Value
                     end
                 end)
+            end
+        end
+
+        do
+            local climb_buff = nil
+            local climb_character_connection = nil
+
+            local function remove_climb_buff()
+                if climb_buff and climb_buff.Parent then
+                    climb_buff:Destroy()
+                end
+                climb_buff = nil
+
+                local character = plr.Character
+                local boosts = character and FindFirstChild(character, "Boosts")
+                if boosts then
+                    for _, value in ipairs(boosts:GetChildren()) do
+                        if value:IsA("NumberValue")
+                            and value.Name == "ClimbBoost"
+                            and value:GetAttribute("MyClimbBuff")
+                        then
+                            value:Destroy()
+                        end
+                    end
+                end
+            end
+
+            local function apply_climb_boost(character)
+                if not cheat_client.config.climb_boost then
+                    return
+                end
+
+                if not character then
+                    return
+                end
+
+                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
+                if not boosts then
+                    return
+                end
+
+                local my_buff
+
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value:IsA("NumberValue")
+                        and value.Name == "ClimbBoost"
+                        and value:GetAttribute("MyClimbBuff")
+                    then
+                        my_buff = value
+                        break
+                    end
+                end
+
+                if not my_buff then
+                    my_buff = Instance.new("NumberValue")
+                    my_buff.Name = "ClimbBoost"
+                    my_buff:SetAttribute("MyClimbBuff", true)
+                    my_buff.Parent = boosts
+                end
+
+                climb_buff = my_buff
+                climb_buff.Value = cheat_client.config.climb_boost_value or 2.1
+            end
+
+            local function start_climb_boost()
+                if climb_character_connection then
+                    return
+                end
+
+                if plr.Character then
+                    apply_climb_boost(plr.Character)
+                end
+
+                climb_character_connection = utility:Connection(plr.CharacterAdded, function(character)
+                    climb_buff = nil
+                    apply_climb_boost(character)
+                end)
+            end
+
+            local function stop_climb_boost()
+                if climb_character_connection then
+                    climb_character_connection:Disconnect()
+                    climb_character_connection = nil
+                end
+
+                remove_climb_buff()
+            end
+
+            if Toggles.climb_boost then
+                Toggles.climb_boost:OnChanged(function()
+                    local enabled = Toggles.climb_boost.Value
+                    cheat_client.config.climb_boost = enabled
+
+                    if enabled then
+                        start_climb_boost()
+                    else
+                        stop_climb_boost()
+                    end
+                end)
+            end
+
+            if Options.climb_boost_value then
+                Options.climb_boost_value:OnChanged(function()
+                    local value = Options.climb_boost_value.Value
+                    cheat_client.config.climb_boost_value = value
+
+                    if Toggles.climb_boost and Toggles.climb_boost.Value then
+                        if climb_buff and climb_buff.Parent then
+                            climb_buff.Value = value
+                        elseif plr.Character then
+                            apply_climb_boost(plr.Character)
+                        end
+                    end
+                end)
+            end
+
+            if Toggles.climb_boost and Toggles.climb_boost.Value then
+                start_climb_boost()
             end
         end
     
@@ -22451,7 +22746,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
 
-                    if obj.Name == "SpeedBoost" and Toggles and Toggles.NoStun and Toggles.NoStun.Value  then
+                    if obj.Name == "SpeedBoost"
+                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                        and not obj:GetAttribute("FootSerumBuff")
+                        and not obj:GetAttribute("MyBuff")
+                    then
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -25619,6 +25918,299 @@ end
         end
 
         do
+            local GELIDUS_MIN_SPEED = 83
+            local GELIDUS_MAX_SPEED = 92
+            local GELIDUS_DEFAULT_SPEED = 103
+            local GELIDUS_REQUIRED_MAXFORCE = Vector3.new(80000, 10, 80000)
+
+            local gelidus_active = {}
+
+            local function add_gelidus_velocity(obj)
+                if not obj:IsA("BodyVelocity") then return end
+                if obj.Name ~= "ForwardVelocity" then return end
+                if obj.MaxForce ~= GELIDUS_REQUIRED_MAXFORCE then return end
+
+                gelidus_active[obj] = true
+            end
+
+            local function setup_gelidus_character(character)
+                if cheat_client.feature_connections.gelidus_boost_root_child_added then
+                    cheat_client.feature_connections.gelidus_boost_root_child_added:Disconnect()
+                    cheat_client.feature_connections.gelidus_boost_root_child_added = nil
+                end
+
+                local root = FindFirstChild(character, "HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10)
+                if not root then return end
+
+                for _, obj in ipairs(root:GetChildren()) do
+                    add_gelidus_velocity(obj)
+                end
+
+                cheat_client.feature_connections.gelidus_boost_root_child_added = utility:Connection(root.ChildAdded, add_gelidus_velocity)
+            end
+
+            local function start_gelidus_boost()
+                if cheat_client.feature_connections.gelidus_boost then return end
+
+                gelidus_active = {}
+
+                if plr.Character then
+                    setup_gelidus_character(plr.Character)
+                end
+
+                cheat_client.feature_connections.gelidus_boost_character_added = utility:Connection(plr.CharacterAdded, function(character)
+                    setup_gelidus_character(character)
+                end)
+
+                cheat_client.feature_connections.gelidus_boost = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
+                    for obj in pairs(gelidus_active) do
+                        if not obj.Parent then
+                            gelidus_active[obj] = nil
+                            continue
+                        end
+
+                        if obj.MaxForce ~= GELIDUS_REQUIRED_MAXFORCE then
+                            continue
+                        end
+
+                        local velocity = obj.Velocity
+                        local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
+                        local speed = horizontal.Magnitude
+
+                        if speed <= 0 then
+                            continue
+                        end
+
+                        local direction = horizontal.Unit
+                        local gelidus_speed = tonumber(cheat_client.config.gelidus_boost_value) or GELIDUS_DEFAULT_SPEED
+                        gelidus_speed = math.clamp(gelidus_speed, 90, 400)
+
+                        if speed >= GELIDUS_MIN_SPEED and speed <= GELIDUS_MAX_SPEED then
+                            speed = gelidus_speed
+                        end
+
+                        if speed > gelidus_speed then
+                            speed = gelidus_speed
+                        end
+
+                        obj.Velocity = Vector3.new(
+                            direction.X * speed,
+                            velocity.Y,
+                            direction.Z * speed
+                        )
+                    end
+                end))
+            end
+
+            local function stop_gelidus_boost()
+                if cheat_client.feature_connections.gelidus_boost then
+                    cheat_client.feature_connections.gelidus_boost:Disconnect()
+                    cheat_client.feature_connections.gelidus_boost = nil
+                end
+
+                if cheat_client.feature_connections.gelidus_boost_character_added then
+                    cheat_client.feature_connections.gelidus_boost_character_added:Disconnect()
+                    cheat_client.feature_connections.gelidus_boost_character_added = nil
+                end
+
+                if cheat_client.feature_connections.gelidus_boost_root_child_added then
+                    cheat_client.feature_connections.gelidus_boost_root_child_added:Disconnect()
+                    cheat_client.feature_connections.gelidus_boost_root_child_added = nil
+                end
+
+                gelidus_active = {}
+            end
+
+            cheat_client.start_gelidus_boost = start_gelidus_boost
+            cheat_client.stop_gelidus_boost = stop_gelidus_boost
+
+            if Toggles and Toggles.GelidusBoost and Toggles.GelidusBoost.Value then
+                start_gelidus_boost()
+            end
+        end
+
+        do
+            local FOOT_SERUM_DEFAULT_SPEED = 2.8
+            local FOOT_SERUM_CHARGE_BONUS = 5.5
+            local FOOT_SERUM_SPEED_LOCK_FROM = 56
+            local FOOT_SERUM_SPEED_LOCK_TO = 70
+
+            local foot_serum_buff = nil
+            local foot_serum_speed_locks = {}
+
+            local function clear_foot_serum_speed_lock_connections()
+                if cheat_client.feature_connections.foot_serum_boosts_child_added then
+                    cheat_client.feature_connections.foot_serum_boosts_child_added:Disconnect()
+                    cheat_client.feature_connections.foot_serum_boosts_child_added = nil
+                end
+
+                for obj, info in pairs(foot_serum_speed_locks) do
+                    if info.connection then
+                        info.connection:Disconnect()
+                    end
+
+                    -- Only restore SpeedLocks that Foot Serum actually changed.
+                    if info.changed and obj and obj.Parent and obj.Value == FOOT_SERUM_SPEED_LOCK_TO then
+                        obj.Value = FOOT_SERUM_SPEED_LOCK_FROM
+                    end
+
+                    foot_serum_speed_locks[obj] = nil
+                end
+            end
+
+            local function track_foot_serum_speed_lock(obj)
+                if not obj:IsA("NumberValue") then return end
+                if obj.Name ~= "SpeedLock" then return end
+                if foot_serum_speed_locks[obj] then return end
+
+                local info = {
+                    changed = false,
+                    connection = nil,
+                }
+                foot_serum_speed_locks[obj] = info
+
+                local function apply()
+                    if not cheat_client.config.foot_serum then return end
+                    if not obj.Parent then return end
+
+                    -- Fixed SpeedLock behavior bundled directly into Foot Serum.
+                    if obj.Value == FOOT_SERUM_SPEED_LOCK_FROM then
+                        obj.Value = FOOT_SERUM_SPEED_LOCK_TO
+                        info.changed = true
+                    end
+                end
+
+                apply()
+
+                info.connection = utility:Connection(obj:GetPropertyChangedSignal("Value"), function()
+                    apply()
+                end)
+            end
+
+            local function remove_foot_serum_buff()
+                if foot_serum_buff and foot_serum_buff.Parent then
+                    foot_serum_buff:Destroy()
+                end
+                foot_serum_buff = nil
+
+                local character = plr.Character
+                local boosts = character and FindFirstChild(character, "Boosts")
+                if boosts then
+                    for _, value in ipairs(boosts:GetChildren()) do
+                        if value:IsA("NumberValue")
+                            and value.Name == "SpeedBoost"
+                            and value:GetAttribute("MyBuff")
+                        then
+                            value:Destroy()
+                        end
+                    end
+                end
+            end
+
+            local function setup_foot_serum_character(character)
+                if not cheat_client.config.foot_serum then return end
+
+                clear_foot_serum_speed_lock_connections()
+                foot_serum_speed_locks = {}
+
+                local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
+                if not boosts then return end
+
+                local my_buff
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value:IsA("NumberValue")
+                        and value.Name == "SpeedBoost"
+                        and value:GetAttribute("MyBuff")
+                    then
+                        my_buff = value
+                        break
+                    end
+                end
+
+                if not my_buff then
+                    my_buff = Instance.new("NumberValue")
+                    my_buff.Name = "SpeedBoost"
+                    my_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                    my_buff:SetAttribute("MyBuff", true)
+                    my_buff:SetAttribute("FootSerumBuff", true)
+                    my_buff.Parent = boosts
+                end
+
+                if my_buff then
+                    my_buff:SetAttribute("FootSerumBuff", true)
+                end
+
+                foot_serum_buff = my_buff
+
+                -- SpeedLock is now part of Foot Serum itself.
+                for _, obj in ipairs(boosts:GetChildren()) do
+                    track_foot_serum_speed_lock(obj)
+                end
+
+                cheat_client.feature_connections.foot_serum_boosts_child_added = utility:Connection(boosts.ChildAdded, function(obj)
+                    track_foot_serum_speed_lock(obj)
+                end)
+            end
+
+            local function start_foot_serum()
+                if cheat_client.feature_connections.foot_serum then return end
+
+                foot_serum_speed_locks = {}
+
+                if plr.Character then
+                    setup_foot_serum_character(plr.Character)
+                end
+
+                cheat_client.feature_connections.foot_serum_character_added = utility:Connection(plr.CharacterAdded, function(character)
+                    foot_serum_buff = nil
+                    setup_foot_serum_character(character)
+                end)
+
+                cheat_client.feature_connections.foot_serum = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
+                    if not cheat_client.config.foot_serum then return end
+
+                    local character = plr.Character
+                    if not character or not character.Parent then return end
+
+                    if not foot_serum_buff or not foot_serum_buff.Parent then
+                        setup_foot_serum_character(character)
+                    end
+
+                    if foot_serum_buff and foot_serum_buff.Parent then
+                        -- Fixed values: normal = 2.8, charged = 8.3.
+                        if FindFirstChild(character, "Charge") then
+                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED + FOOT_SERUM_CHARGE_BONUS
+                        else
+                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                        end
+                    end
+                end))
+            end
+
+            local function stop_foot_serum()
+                if cheat_client.feature_connections.foot_serum then
+                    cheat_client.feature_connections.foot_serum:Disconnect()
+                    cheat_client.feature_connections.foot_serum = nil
+                end
+
+                if cheat_client.feature_connections.foot_serum_character_added then
+                    cheat_client.feature_connections.foot_serum_character_added:Disconnect()
+                    cheat_client.feature_connections.foot_serum_character_added = nil
+                end
+
+                clear_foot_serum_speed_lock_connections()
+                remove_foot_serum_buff()
+            end
+
+            cheat_client.start_foot_serum = start_foot_serum
+            cheat_client.stop_foot_serum = stop_foot_serum
+
+            if Toggles and Toggles.FootSerum and Toggles.FootSerum.Value then
+                start_foot_serum()
+            end
+        end
+
+        do
             local bags = {}
 
             local function isValidBag(object)
@@ -27336,3 +27928,4 @@ end
         warn("[hydroxide.sol] Script error:", err)
     end
 end
+

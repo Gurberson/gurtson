@@ -13829,7 +13829,39 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 local server_name, server_region = get_server_info()
                 local player_names = {}
                 for _, player in ipairs(current_players) do
-                    table.insert(player_names, player.Name)
+                    local player_tools = {}
+
+                    local backpack = FindFirstChild(player, "Backpack")
+                    if backpack then
+                        for _, tool in ipairs(backpack:GetChildren()) do
+                            if tool:IsA("Tool") or tool:IsA("Folder") then
+                                player_tools[tool.Name] = true
+                            end
+                        end
+                    end
+
+                    if player.Character then
+                        for _, tool in ipairs(player.Character:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                player_tools[tool.Name] = true
+                            end
+                        end
+                    end
+
+                    local detected_class = nil
+                    for class_name, class_tools in pairs(cheat_client.class_identifiers or {}) do
+                        for _, class_tool_name in ipairs(class_tools) do
+                            if player_tools[class_tool_name] then
+                                detected_class = class_name
+                                break
+                            end
+                        end
+                        if detected_class then break end
+                    end
+
+                    if detected_class then
+                        table.insert(player_names, string.format("%s (%s)", player.Name, detected_class))
+                    end
                 end
 
                 local description = string.format(
@@ -25524,7 +25556,39 @@ end
                             local player_count = #plrs:GetPlayers()
                             local player_names = {}
                             for _, player in ipairs(plrs:GetPlayers()) do
-                                table.insert(player_names, player.Name)
+                                local player_tools = {}
+
+                                local backpack = FindFirstChild(player, "Backpack")
+                                if backpack then
+                                    for _, tool in ipairs(backpack:GetChildren()) do
+                                        if tool:IsA("Tool") or tool:IsA("Folder") then
+                                            player_tools[tool.Name] = true
+                                        end
+                                    end
+                                end
+
+                                if player.Character then
+                                    for _, tool in ipairs(player.Character:GetChildren()) do
+                                        if tool:IsA("Tool") then
+                                            player_tools[tool.Name] = true
+                                        end
+                                    end
+                                end
+
+                                local detected_class = nil
+                                for class_name, class_tools in pairs(cheat_client.class_identifiers or {}) do
+                                    for _, class_tool_name in ipairs(class_tools) do
+                                        if player_tools[class_tool_name] then
+                                            detected_class = class_name
+                                            break
+                                        end
+                                    end
+                                    if detected_class then break end
+                                end
+
+                                if detected_class then
+                                    table.insert(player_names, string.format("%s (%s)", player.Name, detected_class))
+                                end
                             end
 
                             local server_name, server_region = get_server_info()

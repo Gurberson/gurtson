@@ -14089,15 +14089,51 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             trinket_bot.path_running = false
                             pcall(function() library:Notify("Path stopped due to death") end)
 
+                            local nearby_on_death = {}
+                            local death_root = FindFirstChild(character, "HumanoidRootPart")
+
+                            if death_root then
+                                local death_position = death_root.Position
+
+                                for _, other_player in next, plrs:GetPlayers() do
+                                    if other_player ~= plr and other_player.Character then
+                                        local other_root = FindFirstChild(other_player.Character, "HumanoidRootPart")
+                                        if other_root then
+                                            local distance = (other_root.Position - death_position).Magnitude
+                                            if distance <= 500 then
+                                                table.insert(nearby_on_death, string.format("%s (%d studs)", other_player.Name, math.floor(distance + 0.5)))
+                                            end
+                                        end
+                                    end
+                                end
+
+                                table.sort(nearby_on_death)
+                            end
+
+                            local nearby_death_text
+                            if not death_root then
+                                nearby_death_text = "Players within 500 studs on death: unable to scan (bot HumanoidRootPart missing)"
+                            elseif #nearby_on_death > 0 then
+                                nearby_death_text = "Players within 500 studs on death: " .. table.concat(nearby_on_death, ", ")
+                            else
+                                nearby_death_text = "Players within 500 studs on death: none"
+                            end
+
+                            warn("[DEATH LOG] " .. nearby_death_text)
+
                             local stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false
                             if test_mode then
                                 pcall(function() library:Notify("You died (test mode - not kicking)") end)
                             elseif stay_in_server then
                                 pcall(function() library:Notify("You died (stay in server - not kicking)") end)
-                                pcall(function() utility:plain_webhook("bot died (stay in server mode)") end)
+                                pcall(function()
+                                    utility:plain_webhook("bot died (stay in server mode)\n" .. nearby_death_text)
+                                end)
                             else
                                 task.spawn(function()
-                                    pcall(function() utility:plain_webhook("bot died - kicking") end)
+                                    pcall(function()
+                                        utility:plain_webhook("bot died - kicking\n" .. nearby_death_text)
+                                    end)
                                     task.wait(0.3)
                                     plr:Kick("bot died")
                                 end)

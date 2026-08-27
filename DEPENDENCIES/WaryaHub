@@ -15022,7 +15022,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             for j = i + 1, #trinket_bot.path_points do
                                 if trinket_bot.path_points[j].is_gate_point then
                                     local destination_clear = true
-                                    local blocking_player = ""
+                                    local blocking_entity_type = ""
+                                    local blocking_entity_name = ""
 
                                     local check_limit = 10
                                     for k = j + 1, #trinket_bot.path_points do
@@ -15036,9 +15037,17 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         local dest_point = trinket_bot.path_points[j + k]
                                         if dest_point then
                                             local has_player, check_player_name = IsPlayerNearPosition(dest_point.position, 250)
+                                            local has_shrieker, check_shrieker_name = detect_shrieker_near_position(dest_point.position, 250)
+
                                             if has_player then
                                                 destination_clear = false
-                                                blocking_player = check_player_name
+                                                blocking_entity_type = "Player"
+                                                blocking_entity_name = check_player_name
+                                                break
+                                            elseif has_shrieker then
+                                                destination_clear = false
+                                                blocking_entity_type = "Shrieker"
+                                                blocking_entity_name = check_shrieker_name
                                                 break
                                             end
                                         end
@@ -15049,7 +15058,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         next_gate_index = j
                                         break
                                     else
-                                        library:Notify(string.format("Player %s near gate %d destination - skipping", blocking_player, j))
+                                        library:Notify(string.format("%s %s near gate %d destination - skipping", blocking_entity_type, blocking_entity_name, j))
                                     end
                                 end
                             end
@@ -15880,15 +15889,24 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             for j = i + 1, #trinket_bot.path_points do
                                 if trinket_bot.path_points[j].is_gate_point then
                                     local destination_clear = true
-                                    local blocking_player = ""
+                                    local blocking_entity_type = ""
+                                    local blocking_entity_name = ""
 
                                     for k = j + 1, math.min(j + 3, #trinket_bot.path_points) do
                                         local dest_point = trinket_bot.path_points[k]
                                         if dest_point then
-                                            local has_player, player_name = IsPlayerNearPosition(dest_point.position, 65)
+                                            local has_player, check_player_name = IsPlayerNearPosition(dest_point.position, 65)
+                                            local has_shrieker, check_shrieker_name = detect_shrieker_near_position(dest_point.position, 65)
+
                                             if has_player then
                                                 destination_clear = false
-                                                blocking_player = player_name
+                                                blocking_entity_type = "Player"
+                                                blocking_entity_name = check_player_name
+                                                break
+                                            elseif has_shrieker then
+                                                destination_clear = false
+                                                blocking_entity_type = "Shrieker"
+                                                blocking_entity_name = check_shrieker_name
                                                 break
                                             end
                                         end
@@ -15899,7 +15917,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         next_gate_index = j
                                         break
                                     else
-                                        library:Notify(string.format("Player %s near gate %d destination - skipping", blocking_player, j))
+                                        library:Notify(string.format("%s %s near gate %d destination - skipping", blocking_entity_type, blocking_entity_name, j))
                                     end
                                 end
                             end
@@ -16087,9 +16105,37 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     local next_gate_index = nil
                                     for j = i + 1, #trinket_bot.path_points do
                                         if trinket_bot.path_points[j].is_gate_point then
-                                            next_gate_point = trinket_bot.path_points[j]
-                                            next_gate_index = j
-                                            break
+                                            local destination_clear = true
+                                            local blocking_entity_type = ""
+                                            local blocking_entity_name = ""
+
+                                            for k = j + 1, math.min(j + 3, #trinket_bot.path_points) do
+                                                local dest_point = trinket_bot.path_points[k]
+                                                if dest_point then
+                                                    local has_player, check_player_name = IsPlayerNearPosition(dest_point.position, 65)
+                                                    local has_shrieker, check_shrieker_name = detect_shrieker_near_position(dest_point.position, 65)
+
+                                                    if has_player then
+                                                        destination_clear = false
+                                                        blocking_entity_type = "Player"
+                                                        blocking_entity_name = check_player_name
+                                                        break
+                                                    elseif has_shrieker then
+                                                        destination_clear = false
+                                                        blocking_entity_type = "Shrieker"
+                                                        blocking_entity_name = check_shrieker_name
+                                                        break
+                                                    end
+                                                end
+                                            end
+
+                                            if destination_clear then
+                                                next_gate_point = trinket_bot.path_points[j]
+                                                next_gate_index = j
+                                                break
+                                            else
+                                                library:Notify(string.format("%s %s near gate %d destination - skipping", blocking_entity_type, blocking_entity_name, j))
+                                            end
                                         end
                                     end
 
@@ -16923,7 +16969,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             group_trinket_bot:AddDropdown("EmergencyServerhopConditions", {
                 Text = "Emergency Serverhop Conditions",
                 Tooltip = "Select items that trigger instant serverhop when equipped by another player (no emergency gate)",
-                Values = {"Perflora", "Pebble", "Celeritas", "Opal Shard", "Shrieker"},
+                Values = {"Perflora", "Pebble", "Celeritas", "Opal Shard"},
                 Multi = true,
                 Default = {"Perflora", "Pebble", "Celeritas"},
                 Compact = true

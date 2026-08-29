@@ -22169,7 +22169,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 if mana_instance then
                                     local mana_value = mana_instance.Value
 
-                                    if mana_value >= 19 and mana_value <= 28 then
+                                    if mana_value >= 19 and mana_value <= 30 then
                                         return old_remote(Event, ...)
                                     end
 

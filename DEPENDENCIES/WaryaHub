@@ -21355,35 +21355,35 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
     do
         --==================================================
         -- SEER INTENT
-        -- Direct BillboardGui version (no external model / asset download)
+        -- Direct BillboardGui version (no RBXM / no asset download)
+        -- Keeps Warya's Player.Character tracking for reliability.
         --==================================================
 
-        local intent_tracked = {}
-        local intent_live_connection = nil
+        local legit_intent_player_connections = {}
+        local legit_intent_global_connections = {}
+
+        local function disconnect_connection(connection)
+            if connection and connection.Connected then
+                connection:Disconnect()
+            end
+        end
 
         local function remove_watched_gui(character)
-            local data = intent_tracked[character]
-            if not data then
+            local watched = watched_guis[character]
+            if not watched then
                 return
             end
 
-            if data.child_added then
-                data.child_added:Disconnect()
+            if watched.connections then
+                for _, connection in pairs(watched.connections) do
+                    disconnect_connection(connection)
+                end
             end
 
-            if data.child_removed then
-                data.child_removed:Disconnect()
+            if watched.gui and watched.gui.Parent then
+                watched.gui:Destroy()
             end
 
-            if data.ancestry_changed then
-                data.ancestry_changed:Disconnect()
-            end
-
-            if data.gui then
-                data.gui:Destroy()
-            end
-
-            intent_tracked[character] = nil
             watched_guis[character] = nil
         end
 
@@ -21397,23 +21397,22 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     return
                 end
 
-                -- Don't show your own intent
                 if character == plr.Character or character.Name == plr.Name then
                     return
                 end
 
-                -- Ignore monsters
                 if FindFirstChild(character, "MonsterInfo") then
                     return
                 end
 
-                -- Prevent duplicate displays
-                if intent_tracked[character] then
+                if watched_guis[character] then
                     return
                 end
 
                 local root_part = FindFirstChild(character, "HumanoidRootPart")
-                    or character:WaitForChild("HumanoidRootPart", 10)
+                if not root_part then
+                    root_part = character:WaitForChild("HumanoidRootPart", 10)
+                end
 
                 if not root_part then
                     return
@@ -21424,7 +21423,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 watched.Name = "Watched"
                 watched.Adornee = root_part
-                watched.Parent = cg
+                -- Use the same protected UI container as the rest of Warya.
+                watched.Parent = hidden_folder
                 watched.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
                 watched.Active = true
                 watched.MaxDistance = 99999997781963083612160
@@ -21445,61 +21445,99 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 display.TextStrokeTransparency = 0
                 display.TextWrapped = true
 
-                local function update_tool()
-                    if not character.Parent or not display.Parent then
-                        return
-                    end
-
-                    local equipped_tool = FindFirstChildOfClass(character, "Tool")
-                    display.Text = equipped_tool and equipped_tool.Name or ""
+                local equipped_tool = FindFirstChildOfClass(character, "Tool")
+                if equipped_tool then
+                    display.Text = equipped_tool.Name
                 end
 
-                update_tool()
+                local connections = {}
 
-                local child_added = character.ChildAdded:Connect(function(object)
+                connections.child_added = utility:Connection(character.ChildAdded, function(object)
                     if object:IsA("Tool") then
                         display.Text = tostring(object.Name)
                     end
                 end)
 
-                local child_removed = character.ChildRemoved:Connect(function(object)
+                connections.child_removed = utility:Connection(character.ChildRemoved, function(object)
                     if object:IsA("Tool") then
-                        task.defer(update_tool)
+                        display.Text = ""
                     end
                 end)
 
-                local ancestry_changed
-                ancestry_changed = character.AncestryChanged:Connect(function(_, parent)
+                connections.ancestry_changed = utility:Connection(character.AncestryChanged, function(_, parent)
                     if parent == nil then
                         remove_watched_gui(character)
                     end
                 end)
 
-                local data = {
+                watched_guis[character] = {
                     gui = watched,
                     display = display,
-                    child_added = child_added,
-                    child_removed = child_removed,
-                    ancestry_changed = ancestry_changed,
+                    connections = connections,
                 }
+            end)
+        end
 
-                intent_tracked[character] = data
-                watched_guis[character] = data
+        local function disconnect_player_legit_intent(player)
+            local connections = legit_intent_player_connections[player]
+            if connections then
+                for _, connection in pairs(connections) do
+                    disconnect_connection(connection)
+                end
+                legit_intent_player_connections[player] = nil
+            end
+
+            if player and player.Character then
+                remove_watched_gui(player.Character)
+            end
+        end
+
+        local function connect_player_legit_intent(player)
+            if not player or player == plr then
+                return
+            end
+
+            disconnect_player_legit_intent(player)
+
+            local connections = {}
+            legit_intent_player_connections[player] = connections
+
+            if player.Character then
+                task.spawn(create_watched_gui, player.Character)
+            end
+
+            connections.character_added = utility:Connection(player.CharacterAdded, function(character)
+                if Toggles and Toggles.LegitIntent and Toggles.LegitIntent.Value then
+                    task.spawn(create_watched_gui, character)
+                end
+            end)
+
+            connections.character_removing = utility:Connection(player.CharacterRemoving, function(character)
+                remove_watched_gui(character)
             end)
         end
 
         cheat_client.legit_intent_cleanup = function()
-            if intent_live_connection then
-                intent_live_connection:Disconnect()
-                intent_live_connection = nil
+            for _, connection in pairs(legit_intent_global_connections) do
+                disconnect_connection(connection)
+            end
+            table.clear(legit_intent_global_connections)
+
+            local players_to_disconnect = {}
+            for player in pairs(legit_intent_player_connections) do
+                players_to_disconnect[#players_to_disconnect + 1] = player
             end
 
-            local characters = {}
-            for character in pairs(intent_tracked) do
-                characters[#characters + 1] = character
+            for _, player in ipairs(players_to_disconnect) do
+                disconnect_player_legit_intent(player)
             end
 
-            for _, character in ipairs(characters) do
+            local characters_to_remove = {}
+            for character in pairs(watched_guis) do
+                characters_to_remove[#characters_to_remove + 1] = character
+            end
+
+            for _, character in ipairs(characters_to_remove) do
                 remove_watched_gui(character)
             end
         end
@@ -21509,15 +21547,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 return
             end
 
-            -- Clean any stale displays/connections before re-enabling.
             cheat_client.legit_intent_cleanup()
 
-            for _, character in ipairs(live_folder:GetChildren()) do
-                task.spawn(create_watched_gui, character)
+            for _, player in pairs(plrs:GetPlayers()) do
+                connect_player_legit_intent(player)
             end
 
-            intent_live_connection = live_folder.ChildAdded:Connect(function(character)
-                task.spawn(create_watched_gui, character)
+            legit_intent_global_connections.player_added = utility:Connection(plrs.PlayerAdded, function(player)
+                if Toggles and Toggles.LegitIntent and Toggles.LegitIntent.Value then
+                    connect_player_legit_intent(player)
+                end
+            end)
+
+            legit_intent_global_connections.player_removing = utility:Connection(plrs.PlayerRemoving, function(player)
+                disconnect_player_legit_intent(player)
             end)
         end
 

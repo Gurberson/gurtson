@@ -22501,9 +22501,37 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         do
             local buff_connections = {}
             local speed_object = nil
+            local PRIORITY_SPEED_BOOST_VALUE = -10
+
+            local function has_priority_speed_boost(boosts)
+                if not boosts then return false end
+
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value ~= speed_object
+                        and value.Name == "SpeedBoost"
+                        and (value:IsA("NumberValue") or value:IsA("IntValue"))
+                        and value.Value == PRIORITY_SPEED_BOOST_VALUE
+                    then
+                        return true
+                    end
+                end
+
+                return false
+            end
 
             local function make_speed_object(character)
                 if character and FindFirstChild(character, "Boosts") then
+                    local boosts = character.Boosts
+
+                    -- A -10 SpeedBoost always takes priority over the hub's normal SpeedBoost.
+                    if has_priority_speed_boost(boosts) then
+                        if speed_object and speed_object.Parent then
+                            speed_object:Destroy()
+                        end
+                        speed_object = nil
+                        return
+                    end
+
                     if speed_object and speed_object.Parent then
                         speed_object:Destroy()
                     end
@@ -22511,7 +22539,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     speed_object = Instance.new("IntValue")
                     speed_object.Name = "SpeedBoost"
                     speed_object.Value = (Toggles.speed_boost and Toggles.speed_boost.Value) and (Options.speed_boost_value and Options.speed_boost_value.Value or 16) or 0
-                    speed_object.Parent = character.Boosts
+                    speed_object:SetAttribute("MyBuff", true)
+                    speed_object.Parent = boosts
                 end
             end
 
@@ -22521,6 +22550,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
                 if buff_connections.boosts_child_added then
                     buff_connections.boosts_child_added:Disconnect()
+                end
+                if buff_connections.boosts_child_removed then
+                    buff_connections.boosts_child_removed:Disconnect()
                 end
 
                 if not character then return end
@@ -22561,13 +22593,66 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         return
                     end
 
+                    if obj.Name == "SpeedBoost" and (obj:IsA("NumberValue") or obj:IsA("IntValue")) then
+                        local was_priority = obj.Value == PRIORITY_SPEED_BOOST_VALUE
+
+                        local function apply_priority()
+                            if not obj.Parent then return end
+
+                            local is_priority = obj.Value == PRIORITY_SPEED_BOOST_VALUE
+                            if is_priority then
+                                if speed_object and speed_object.Parent and speed_object ~= obj then
+                                    speed_object:Destroy()
+                                    speed_object = nil
+                                end
+                            elseif was_priority and not has_priority_speed_boost(boosts) then
+                                task.defer(function()
+                                    if character.Parent and Toggles.speed_boost and Toggles.speed_boost.Value then
+                                        make_speed_object(character)
+                                    end
+                                end)
+                            end
+
+                            was_priority = is_priority
+                        end
+
+                        apply_priority()
+                        utility:Connection(obj:GetPropertyChangedSignal("Value"), apply_priority)
+                    end
+
                     if obj.Name == "SpeedBoost"
                         and Toggles and Toggles.NoStun and Toggles.NoStun.Value
                         and not obj:GetAttribute("FootSerumBuff")
                         and not obj:GetAttribute("MyBuff")
                     then
-                        task.defer(obj.Destroy, obj)
+                        task.defer(function()
+                            if not obj or not obj.Parent then return end
+
+                            -- Preserve the -10 SpeedBoost even if its Value is assigned
+                            -- immediately after the instance is parented into Boosts.
+                            if (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value == PRIORITY_SPEED_BOOST_VALUE then
+                                return
+                            end
+
+                            obj:Destroy()
+                        end)
                         return
+                    end
+                end)
+
+                buff_connections.boosts_child_removed = utility:Connection(boosts.ChildRemoved, function(obj)
+                    if obj.Name == "SpeedBoost"
+                        and (obj:IsA("NumberValue") or obj:IsA("IntValue"))
+                        and obj.Value == PRIORITY_SPEED_BOOST_VALUE
+                    then
+                        task.defer(function()
+                            if character.Parent
+                                and not has_priority_speed_boost(boosts)
+                                and Toggles.speed_boost and Toggles.speed_boost.Value
+                            then
+                                make_speed_object(character)
+                            end
+                        end)
                     end
                 end)
 
@@ -23026,7 +23111,17 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         and not obj:GetAttribute("FootSerumBuff")
                         and not obj:GetAttribute("MyBuff")
                     then
-                        task.defer(obj.Destroy, obj)
+                        task.defer(function()
+                            if not obj or not obj.Parent then return end
+
+                            -- Preserve the -10 SpeedBoost even if its Value is assigned
+                            -- immediately after the instance is parented into Boosts.
+                            if (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value == -10 then
+                                return
+                            end
+
+                            obj:Destroy()
+                        end)
                         return
                     end
                 end)
@@ -26343,6 +26438,7 @@ end
             local FOOT_SERUM_CHARGE_BONUS = 5.5
             local FOOT_SERUM_SPEED_LOCK_FROM = 56
             local FOOT_SERUM_SPEED_LOCK_TO = 70
+            local PRIORITY_SPEED_BOOST_VALUE = -10
 
             local foot_serum_buff = nil
             local foot_serum_speed_locks = {}
@@ -26416,6 +26512,21 @@ end
                 end
             end
 
+            local function has_priority_speed_boost(boosts)
+                if not boosts then return false end
+
+                for _, value in ipairs(boosts:GetChildren()) do
+                    if value.Name == "SpeedBoost"
+                        and (value:IsA("NumberValue") or value:IsA("IntValue"))
+                        and value.Value == PRIORITY_SPEED_BOOST_VALUE
+                    then
+                        return true
+                    end
+                end
+
+                return false
+            end
+
             local function setup_foot_serum_character(character)
                 if not cheat_client.config.foot_serum then return end
 
@@ -26424,6 +26535,13 @@ end
 
                 local boosts = FindFirstChild(character, "Boosts") or character:WaitForChild("Boosts", 10)
                 if not boosts then return end
+
+                -- A game-added SpeedBoost of -10 always wins over Foot Serum.
+                -- Remove our positive serum boost while it exists; it will be recreated once -10 is gone.
+                if has_priority_speed_boost(boosts) then
+                    remove_foot_serum_buff()
+                    return
+                end
 
                 local my_buff
                 for _, value in ipairs(boosts:GetChildren()) do
@@ -26457,6 +26575,15 @@ end
                 end
 
                 cheat_client.feature_connections.foot_serum_boosts_child_added = utility:Connection(boosts.ChildAdded, function(obj)
+                    if obj.Name == "SpeedBoost"
+                        and (obj:IsA("NumberValue") or obj:IsA("IntValue"))
+                        and obj.Value == PRIORITY_SPEED_BOOST_VALUE
+                    then
+                        -- -10 has priority: immediately drop our Foot Serum SpeedBoost.
+                        remove_foot_serum_buff()
+                        return
+                    end
+
                     track_foot_serum_speed_lock(obj)
                 end)
             end
@@ -26480,6 +26607,14 @@ end
 
                     local character = plr.Character
                     if not character or not character.Parent then return end
+
+                    local boosts = FindFirstChild(character, "Boosts")
+                    if has_priority_speed_boost(boosts) then
+                        if foot_serum_buff and foot_serum_buff.Parent then
+                            remove_foot_serum_buff()
+                        end
+                        return
+                    end
 
                     if not foot_serum_buff or not foot_serum_buff.Parent then
                         setup_foot_serum_character(character)

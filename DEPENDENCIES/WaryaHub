@@ -22547,6 +22547,49 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             cheat_client.stop_flight_rendering = stop_flight_rendering
         end
 
+        local NOJUMP_PRESERVE_SPEED_BOOST_VALUE = 50
+
+        local function is_nojump_preserve_speed_boost(value)
+            return value
+                and value.Name == "SpeedBoost"
+                and (value:IsA("NumberValue") or value:IsA("IntValue"))
+                and value.Value == NOJUMP_PRESERVE_SPEED_BOOST_VALUE
+                and not value:GetAttribute("FootSerumBuff")
+                and not value:GetAttribute("MyBuff")
+        end
+
+        local function has_nojump_preserve_speed_boost(boosts)
+            if not boosts then return false end
+
+            for _, value in ipairs(boosts:GetChildren()) do
+                if is_nojump_preserve_speed_boost(value) then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local function cleanup_nojump_after_speedboost50(character)
+            if not character or not character.Parent then return end
+
+            local boosts = FindFirstChild(character, "Boosts")
+            if has_nojump_preserve_speed_boost(boosts) then return end
+            if not (Toggles and Toggles.NoStun and Toggles.NoStun.Value) then return end
+
+            local no_jump = FindFirstChild(character, "NoJump")
+            if no_jump then
+                task.defer(function()
+                    if no_jump.Parent
+                        and not has_nojump_preserve_speed_boost(FindFirstChild(character, "Boosts"))
+                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                    then
+                        no_jump:Destroy()
+                    end
+                end)
+            end
+        end
+
         do
             local buff_connections = {}
             local speed_object = nil
@@ -22631,6 +22674,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
 
                     if cheat_client.stuns[obj.Name] and Toggles and Toggles.NoStun and Toggles.NoStun.Value then
+                        -- A game SpeedBoost of 50 needs NoJump to remain active while the boost exists.
+                        if obj.Name == "NoJump" and has_nojump_preserve_speed_boost(boosts) then
+                            return
+                        end
+
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -22644,6 +22692,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                     if obj.Name == "SpeedBoost" and (obj:IsA("NumberValue") or obj:IsA("IntValue")) then
                         local was_priority = obj.Value == PRIORITY_SPEED_BOOST_VALUE
+                        local was_nojump_preserve = is_nojump_preserve_speed_boost(obj)
 
                         local function apply_priority()
                             if not obj.Parent then return end
@@ -22662,7 +22711,26 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 end)
                             end
 
+                            local is_nojump_preserve = is_nojump_preserve_speed_boost(obj)
+                            if was_nojump_preserve and not is_nojump_preserve then
+                                task.defer(function()
+                                    cleanup_nojump_after_speedboost50(character)
+
+                                    -- If the protected 50 changes to a normal external SpeedBoost,
+                                    -- NoStun should handle it normally again.
+                                    if obj.Parent
+                                        and Toggles and Toggles.NoStun and Toggles.NoStun.Value
+                                        and not obj:GetAttribute("FootSerumBuff")
+                                        and not obj:GetAttribute("MyBuff")
+                                        and obj.Value ~= PRIORITY_SPEED_BOOST_VALUE
+                                    then
+                                        obj:Destroy()
+                                    end
+                                end)
+                            end
+
                             was_priority = is_priority
+                            was_nojump_preserve = is_nojump_preserve
                         end
 
                         apply_priority()
@@ -22677,9 +22745,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         task.defer(function()
                             if not obj or not obj.Parent then return end
 
-                            -- Preserve the -10 SpeedBoost even if its Value is assigned
-                            -- immediately after the instance is parented into Boosts.
-                            if (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value == PRIORITY_SPEED_BOOST_VALUE then
+                            -- Preserve the -10 priority SpeedBoost and the external 50 SpeedBoost.
+                            -- The 50 boost temporarily makes NoStun leave NoJump alone.
+                            if (obj:IsA("NumberValue") or obj:IsA("IntValue"))
+                                and (obj.Value == PRIORITY_SPEED_BOOST_VALUE or is_nojump_preserve_speed_boost(obj))
+                            then
                                 return
                             end
 
@@ -22701,6 +22771,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             then
                                 make_speed_object(character)
                             end
+                        end)
+                    end
+
+                    if is_nojump_preserve_speed_boost(obj) then
+                        task.defer(function()
+                            cleanup_nojump_after_speedboost50(character)
                         end)
                     end
                 end)
@@ -23144,6 +23220,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
 
                     if cheat_client.stuns[obj.Name] and Toggles and Toggles.NoStun and Toggles.NoStun.Value then
+                        -- A game SpeedBoost of 50 needs NoJump to remain active while the boost exists.
+                        if obj.Name == "NoJump" and has_nojump_preserve_speed_boost(boosts) then
+                            return
+                        end
+
                         task.defer(obj.Destroy, obj)
                         return
                     end
@@ -23163,9 +23244,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         task.defer(function()
                             if not obj or not obj.Parent then return end
 
-                            -- Preserve the -10 SpeedBoost even if its Value is assigned
-                            -- immediately after the instance is parented into Boosts.
-                            if (obj:IsA("NumberValue") or obj:IsA("IntValue")) and obj.Value == -10 then
+                            -- Preserve the -10 priority SpeedBoost and the external 50 SpeedBoost.
+                            -- The 50 boost temporarily makes NoStun leave NoJump alone.
+                            if (obj:IsA("NumberValue") or obj:IsA("IntValue"))
+                                and (obj.Value == -10 or is_nojump_preserve_speed_boost(obj))
+                            then
                                 return
                             end
 
@@ -26595,7 +26678,7 @@ end
             local FOOT_SERUM_DEFAULT_SPEED = 2.8
             local FOOT_SERUM_CHARGE_BONUS = 5.5
             local FOOT_SERUM_SPEED_LOCK_FROM = 56
-            local FOOT_SERUM_SPEED_LOCK_TO = 70
+            local FOOT_SERUM_SPEED_LOCK_TO = 65
             local PRIORITY_SPEED_BOOST_VALUE = -10
 
             local foot_serum_buff = nil

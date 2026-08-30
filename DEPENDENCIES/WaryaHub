@@ -21427,7 +21427,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 watched.Parent = hidden_folder
                 watched.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
                 watched.Active = true
-                watched.MaxDistance = 125
+                watched.MaxDistance = 170
                 watched.Size = UDim2.new(25, 0, 10, 0)
                 watched.StudsOffsetWorldSpace = Vector3.new(0, 5, 0)
 

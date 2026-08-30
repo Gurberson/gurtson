@@ -27652,14 +27652,14 @@ end
         do
             local valid_tools = { Celeritas = true, Armis = true, Vulnere = true, ["Dagger Throw"] = true, Arguere = true, Grapple = true, ["Autumn Rain"] = true, Ignis = true, Percutiens = true }
 
-            local get_nearest_player = LPH_NO_VIRTUALIZE(function()
+            local get_nearest_player = LPH_NO_VIRTUALIZE(function(mouse_position)
                 local players_list = plrs:GetPlayers()
                 local camera = ws.CurrentCamera
                 local smallest_distance = math.huge
                 local nearest
             
                 local plr_humanoid_root_part = plr.Character and FindFirstChild(plr.Character, "HumanoidRootPart")
-                local mouse_position = Vector2.new(mouse.X, mouse.Y)
+                mouse_position = mouse_position or uis:GetMouseLocation()
             
                 if not plr_humanoid_root_part then
                     return nil
@@ -27756,12 +27756,14 @@ end
 
                 cheat_client.feature_connections.silent_aim = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
                     local isHideFovCircleEnabled = Toggles and Toggles.HideFovCircle and Toggles.HideFovCircle.Value or false
-                    local mouse_pos = Vector2.new(uis:GetMouseLocation().X, uis:GetMouseLocation().Y)
+                    local mouse_pos = uis:GetMouseLocation()
                     aimbot_fov_circle.Position = mouse_pos
                     aimbot_fov_circle.Radius = (Options and Options.SilentAimFov and Options.SilentAimFov.Value) or 100
                     aimbot_fov_circle.Visible = cheat_client.window_active and not isHideFovCircleEnabled
 
-                    local nearest_player = get_nearest_player()
+                    -- Use the exact same mouse position for targeting and the optional FOV drawing.
+                    -- HideFovCircle now affects visibility only.
+                    local nearest_player = get_nearest_player(mouse_pos)
                     if cheat_client and cheat_client.aimbot then
                         cheat_client.aimbot.current_target = nearest_player
                     end

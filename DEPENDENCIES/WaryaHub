@@ -26582,7 +26582,7 @@ end
             local FOOT_SERUM_DEFAULT_SPEED = 2.8
             local FOOT_SERUM_CHARGE_BONUS = 5.5
             local FOOT_SERUM_SPEED_LOCK_FROM = 56
-            local FOOT_SERUM_SPEED_LOCK_TO = 70
+            local FOOT_SERUM_SPEED_LOCK_TO = 65
             local PRIORITY_SPEED_BOOST_VALUE = -10
 
             local foot_serum_buff = nil

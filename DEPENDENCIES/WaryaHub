@@ -598,6 +598,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             double_jump = false,
             the_soul = false,
             better_mana = false,
+            directional_mana_run = false,
             better_unequip = false,
             ignore_danger = false,
             execute_on_serverhop = true,
@@ -8877,6 +8878,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Compact = false,
                 Callback = function(value)
                     cheat_client.config.climb_boost_value = value
+                end
+            })
+
+            group_movement:AddDivider()
+
+            group_movement:AddToggle("DirectionalManaRun", {
+                Text = "Directional Mana Run",
+                Default = cheat_client.config.directional_mana_run or false,
+                Tooltip = "Double tap A/D for sideways mana running or S for backwards mana running. Simulates the same W/arrow-key inputs as the AHK.",
+                Callback = function(value)
+                    cheat_client.config.directional_mana_run = value
+                    if not value and cheat_client.stop_directional_mana_run then
+                        cheat_client.stop_directional_mana_run()
+                    end
                 end
             })
         end
@@ -21427,7 +21442,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 watched.Parent = hidden_folder
                 watched.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
                 watched.Active = true
-                watched.MaxDistance = 170
+                watched.MaxDistance = 400
                 watched.Size = UDim2.new(25, 0, 10, 0)
                 watched.StudsOffsetWorldSpace = Vector3.new(0, 5, 0)
 
@@ -25560,6 +25575,115 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end)
             end)
         end
+
+do
+    -- Directional Mana Run
+    -- Port of movement.ahk:
+    --   A/D double tap -> W tap, W hold, Up tap
+    --   S double tap   -> W tap, W hold, Up tap, Down tap, Down hold
+    -- Synthetic held keys are released when the activating direction is released.
+    local DOUBLE_TAP_WINDOW = 0.20
+    local last_tap = {
+        [Enum.KeyCode.A] = 0,
+        [Enum.KeyCode.S] = 0,
+        [Enum.KeyCode.D] = 0,
+    }
+
+    local active_direction = nil
+    local synthetic_w_held = false
+    local synthetic_down_held = false
+    local activation_id = 0
+
+    local function send_key(is_down, key_code)
+        pcall(function()
+            vim:SendKeyEvent(is_down, key_code, false, game)
+        end)
+    end
+
+    local function tap_key(key_code)
+        send_key(true, key_code)
+        task.wait(0.01)
+        send_key(false, key_code)
+    end
+
+    local function release_directional_mana_run()
+        activation_id = activation_id + 1
+
+        if synthetic_down_held then
+            send_key(false, Enum.KeyCode.Down)
+            synthetic_down_held = false
+        end
+
+        if synthetic_w_held then
+            send_key(false, Enum.KeyCode.W)
+            synthetic_w_held = false
+        end
+
+        active_direction = nil
+    end
+
+    cheat_client.stop_directional_mana_run = release_directional_mana_run
+
+    local function activate_directional_mana_run(direction)
+        release_directional_mana_run()
+
+        activation_id = activation_id + 1
+        local my_activation = activation_id
+        active_direction = direction
+
+        task.spawn(function()
+            -- AHK: Send {w}
+            tap_key(Enum.KeyCode.W)
+            if my_activation ~= activation_id or active_direction ~= direction then return end
+
+            -- AHK: Sleep 10 / Send {w down}
+            task.wait(0.01)
+            if my_activation ~= activation_id or active_direction ~= direction then return end
+            send_key(true, Enum.KeyCode.W)
+            synthetic_w_held = true
+
+            -- AHK: Sleep 10 / Send {up}
+            task.wait(0.01)
+            if my_activation ~= activation_id or active_direction ~= direction then return end
+            tap_key(Enum.KeyCode.Up)
+
+            -- Backwards version also taps Down, then holds Down.
+            if direction == Enum.KeyCode.S then
+                if my_activation ~= activation_id or active_direction ~= direction then return end
+                tap_key(Enum.KeyCode.Down)
+                if my_activation ~= activation_id or active_direction ~= direction then return end
+                send_key(true, Enum.KeyCode.Down)
+                synthetic_down_held = true
+            end
+        end)
+    end
+
+    utility:Connection(uis.InputBegan, function(input, processed)
+        if processed then return end
+        if uis:GetFocusedTextBox() then return end
+        if not (Toggles and Toggles.DirectionalManaRun and Toggles.DirectionalManaRun.Value) then return end
+
+        local key_code = input.KeyCode
+        if key_code ~= Enum.KeyCode.A and key_code ~= Enum.KeyCode.S and key_code ~= Enum.KeyCode.D then
+            return
+        end
+
+        local now = tick()
+        local previous = last_tap[key_code] or 0
+        last_tap[key_code] = now
+
+        if previous > 0 and (now - previous) <= DOUBLE_TAP_WINDOW then
+            last_tap[key_code] = 0
+            activate_directional_mana_run(key_code)
+        end
+    end)
+
+    utility:Connection(uis.InputEnded, function(input)
+        if active_direction and input.KeyCode == active_direction then
+            release_directional_mana_run()
+        end
+    end)
+end
 
 do
     local better_unequip_conn = nil

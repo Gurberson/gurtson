@@ -14338,6 +14338,32 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local emergency_serverhop_connection
                 local emergency_conditions = Options.EmergencyServerhopConditions and Options.EmergencyServerhopConditions.Value or {}
+                local ranged_emergency_items = {
+                    ["Fimbulvetr"] = 700,
+                    ["Manus Dei"] = 700,
+                }
+
+                local function get_emergency_item_distance(tool_name, owner_player)
+                    local max_distance = ranged_emergency_items[tool_name]
+                    if not max_distance then
+                        return true, nil
+                    end
+
+                    if not owner_player or owner_player == plr then
+                        return false, nil
+                    end
+
+                    local local_character = plr.Character
+                    local other_character = owner_player.Character
+                    local local_root = local_character and FindFirstChild(local_character, "HumanoidRootPart")
+                    local other_root = other_character and FindFirstChild(other_character, "HumanoidRootPart")
+                    if not local_root or not other_root then
+                        return false, nil
+                    end
+
+                    local distance = (other_root.Position - local_root.Position).Magnitude
+                    return distance <= max_distance, distance
+                end
 
                 if next(emergency_conditions) ~= nil then
                     local stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false
@@ -14346,10 +14372,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             if other_player ~= plr and other_player.Character then
                                 for _, tool in next, other_player.Character:GetChildren() do
                                     if tool:IsA("Tool") and emergency_conditions[tool.Name] then
-                                        library:Notify(string.format("Player %s already has %s - instant serverhop!", other_player.Name, tool.Name))
-                                        trinket_bot.path_running = false
-                                        TrinketBotServerhop(string.format("Player %s (%s) has dangerous item: %s - instant serverhop (detected on bot start)", other_player.Name, other_player.UserId, tool.Name))
-                                        break
+                                        local should_trigger, distance = get_emergency_item_distance(tool.Name, other_player)
+                                        if should_trigger then
+                                            local distance_text = distance and string.format(" (%.0f studs away)", distance) or ""
+                                            library:Notify(string.format("Player %s already has %s%s - instant serverhop!", other_player.Name, tool.Name, distance_text))
+                                            trinket_bot.path_running = false
+                                            TrinketBotServerhop(string.format("Player %s (%s) has dangerous item: %s%s - instant serverhop (detected on bot start)", other_player.Name, other_player.UserId, tool.Name, distance_text))
+                                            break
+                                        end
                                     end
                                 end
                             end
@@ -14374,10 +14404,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             end
 
                             if owner_player and owner_player ~= plr then
-                                library:Notify(string.format("Player %s has %s - instant serverhop!", owner_player.Name, descendant.Name))
-                                trinket_bot.path_running = false
-                                TrinketBotServerhop(string.format("Player %s (%s) has dangerous item: %s - instant serverhop", owner_player.Name, owner_player.UserId, descendant.Name))
-                            elseif not owner_player then
+                                local should_trigger, distance = get_emergency_item_distance(descendant.Name, owner_player)
+                                if should_trigger then
+                                    local distance_text = distance and string.format(" (%.0f studs away)", distance) or ""
+                                    library:Notify(string.format("Player %s has %s%s - instant serverhop!", owner_player.Name, descendant.Name, distance_text))
+                                    trinket_bot.path_running = false
+                                    TrinketBotServerhop(string.format("Player %s (%s) has dangerous item: %s%s - instant serverhop", owner_player.Name, owner_player.UserId, descendant.Name, distance_text))
+                                end
+                            elseif not owner_player and not ranged_emergency_items[descendant.Name] then
                                 library:Notify(string.format("Dangerous item %s detected in server - instant serverhop!", descendant.Name))
                                 trinket_bot.path_running = false
                                 TrinketBotServerhop(string.format("Dangerous item %s detected in server - instant serverhop (no owner identified)", descendant.Name))
@@ -16992,8 +17026,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             group_trinket_bot:AddDropdown("EmergencyServerhopConditions", {
                 Text = "Emergency Serverhop Conditions",
-                Tooltip = "Select items that trigger instant serverhop when equipped by another player (no emergency gate)",
-                Values = {"Perflora", "Pebble", "Celeritas", "Opal Shard"},
+                Tooltip = "Selected items trigger when equipped; Fimbulvetr/Manus Dei only trigger within 700 studs",
+                Values = {"Perflora", "Pebble", "Celeritas", "Opal Shard", "Fimbulvetr", "Manus Dei"},
                 Multi = true,
                 Default = {"Perflora", "Pebble", "Celeritas"},
                 Compact = true
@@ -26582,7 +26616,7 @@ end
             local FOOT_SERUM_DEFAULT_SPEED = 2.8
             local FOOT_SERUM_CHARGE_BONUS = 5.5
             local FOOT_SERUM_SPEED_LOCK_FROM = 56
-            local FOOT_SERUM_SPEED_LOCK_TO = 65
+            local FOOT_SERUM_SPEED_LOCK_TO = 70
             local PRIORITY_SPEED_BOOST_VALUE = -10
 
             local foot_serum_buff = nil

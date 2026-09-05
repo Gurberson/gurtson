@@ -461,6 +461,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             gelidus_boost = false,
             gelidus_boost_value = 103,
             foot_serum = false,
+            foot_serum_value = 2.8,
             anti_confusion = false,
 
             auto_perfect_block = false,
@@ -7499,6 +7500,18 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             group_combat_utils:AddToggle("FootSerum", {
                 Text = "Foot Serum",
                 Default = cheat_client.config.foot_serum
+            })
+
+            group_combat_utils:AddSlider("FootSerumValue", {
+                Text = "Foot Serum Speed",
+                Default = cheat_client.config.foot_serum_value or 2.8,
+                Min = 1.0,
+                Max = 25.0,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.foot_serum_value = value
+                end
             })
 
             group_combat_utils:AddDivider()
@@ -26644,6 +26657,10 @@ end
             local foot_serum_buff = nil
             local foot_serum_speed_locks = {}
 
+            local function get_foot_serum_speed()
+                return tonumber(cheat_client.config.foot_serum_value) or FOOT_SERUM_DEFAULT_SPEED
+            end
+
             local function clear_foot_serum_speed_lock_connections()
                 if cheat_client.feature_connections.foot_serum_boosts_child_added then
                     cheat_client.feature_connections.foot_serum_boosts_child_added:Disconnect()
@@ -26758,7 +26775,7 @@ end
                 if not my_buff then
                     my_buff = Instance.new("NumberValue")
                     my_buff.Name = "SpeedBoost"
-                    my_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                    my_buff.Value = get_foot_serum_speed()
                     my_buff:SetAttribute("MyBuff", true)
                     my_buff:SetAttribute("FootSerumBuff", true)
                     my_buff.Parent = boosts
@@ -26822,11 +26839,12 @@ end
                     end
 
                     if foot_serum_buff and foot_serum_buff.Parent then
-                        -- Fixed values: normal = 2.8, charged = 8.3.
+                        -- Slider controls the normal Foot Serum value; Charge keeps the +5.5 bonus.
+                        local base_speed = get_foot_serum_speed()
                         if FindFirstChild(character, "Charge") then
-                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED + FOOT_SERUM_CHARGE_BONUS
+                            foot_serum_buff.Value = base_speed + FOOT_SERUM_CHARGE_BONUS
                         else
-                            foot_serum_buff.Value = FOOT_SERUM_DEFAULT_SPEED
+                            foot_serum_buff.Value = base_speed
                         end
                     end
                 end))

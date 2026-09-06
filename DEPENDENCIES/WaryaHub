@@ -460,6 +460,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             no_stun = false,
             gelidus_boost = false,
             gelidus_boost_value = 103,
+            hoppa_boost = false,
             foot_serum = false,
             foot_serum_value = 2.8,
             anti_confusion = false,
@@ -7497,6 +7498,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
             })
 
+            group_combat_utils:AddToggle("HoppaBoost", {
+                Text = "Hoppa Boost",
+                Default = cheat_client.config.hoppa_boost
+            })
+
             group_combat_utils:AddToggle("FootSerum", {
                 Text = "Foot Serum",
                 Default = cheat_client.config.foot_serum
@@ -7697,6 +7703,21 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 else
                     if cheat_client.stop_gelidus_boost then
                         cheat_client.stop_gelidus_boost()
+                    end
+                end
+            end)
+
+            Toggles.HoppaBoost:OnChanged(function()
+                local value = Toggles.HoppaBoost.Value
+                cheat_client.config.hoppa_boost = value
+
+                if value then
+                    if cheat_client.start_hoppa_boost then
+                        cheat_client.start_hoppa_boost()
+                    end
+                else
+                    if cheat_client.stop_hoppa_boost then
+                        cheat_client.stop_hoppa_boost()
                     end
                 end
             end)
@@ -26644,6 +26665,119 @@ end
 
             if Toggles and Toggles.GelidusBoost and Toggles.GelidusBoost.Value then
                 start_gelidus_boost()
+            end
+        end
+
+        do
+            local HOPPA_REQUIRED_MAXFORCE = Vector3.new(1000000, 1000000, 1000000)
+            local HOPPA_Y_TOLERANCE = 0.5
+            local HOPPA_Y_BOOSTS = {
+                [50] = 85,
+                [100] = 200,
+                [200] = 250,
+                [400] = 450,
+            }
+
+            -- [BodyVelocity] = locked boosted Y value. false means waiting for a source Y value.
+            local hoppa_active = {}
+
+            local function get_hoppa_boost_y(y)
+                for source_y, boosted_y in pairs(HOPPA_Y_BOOSTS) do
+                    if math.abs(y - source_y) <= HOPPA_Y_TOLERANCE then
+                        return boosted_y
+                    end
+                end
+                return nil
+            end
+
+            local function add_hoppa_velocity(obj)
+                if not obj:IsA("BodyVelocity") then return end
+                if obj.Name ~= "WindVelocity" then return end
+
+                -- Track it immediately in case MaxForce/Velocity are filled in just after ChildAdded.
+                hoppa_active[obj] = false
+            end
+
+            local function setup_hoppa_character(character)
+                if cheat_client.feature_connections.hoppa_boost_root_child_added then
+                    cheat_client.feature_connections.hoppa_boost_root_child_added:Disconnect()
+                    cheat_client.feature_connections.hoppa_boost_root_child_added = nil
+                end
+
+                local root = FindFirstChild(character, "HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10)
+                if not root then return end
+
+                for _, obj in ipairs(root:GetChildren()) do
+                    add_hoppa_velocity(obj)
+                end
+
+                cheat_client.feature_connections.hoppa_boost_root_child_added = utility:Connection(root.ChildAdded, add_hoppa_velocity)
+            end
+
+            local function start_hoppa_boost()
+                if cheat_client.feature_connections.hoppa_boost then return end
+
+                hoppa_active = {}
+
+                if plr.Character then
+                    setup_hoppa_character(plr.Character)
+                end
+
+                cheat_client.feature_connections.hoppa_boost_character_added = utility:Connection(plr.CharacterAdded, function(character)
+                    setup_hoppa_character(character)
+                end)
+
+                cheat_client.feature_connections.hoppa_boost = utility:Connection(rs.Heartbeat, LPH_NO_VIRTUALIZE(function()
+                    for obj, boosted_y in pairs(hoppa_active) do
+                        if not obj.Parent then
+                            hoppa_active[obj] = nil
+                            continue
+                        end
+
+                        if obj.MaxForce ~= HOPPA_REQUIRED_MAXFORCE then
+                            continue
+                        end
+
+                        local velocity = obj.Velocity
+
+                        if boosted_y == false then
+                            boosted_y = get_hoppa_boost_y(velocity.Y)
+                            if boosted_y then
+                                hoppa_active[obj] = boosted_y
+                            end
+                        end
+
+                        if boosted_y then
+                            obj.Velocity = Vector3.new(velocity.X, boosted_y, velocity.Z)
+                        end
+                    end
+                end))
+            end
+
+            local function stop_hoppa_boost()
+                if cheat_client.feature_connections.hoppa_boost then
+                    cheat_client.feature_connections.hoppa_boost:Disconnect()
+                    cheat_client.feature_connections.hoppa_boost = nil
+                end
+
+                if cheat_client.feature_connections.hoppa_boost_character_added then
+                    cheat_client.feature_connections.hoppa_boost_character_added:Disconnect()
+                    cheat_client.feature_connections.hoppa_boost_character_added = nil
+                end
+
+                if cheat_client.feature_connections.hoppa_boost_root_child_added then
+                    cheat_client.feature_connections.hoppa_boost_root_child_added:Disconnect()
+                    cheat_client.feature_connections.hoppa_boost_root_child_added = nil
+                end
+
+                hoppa_active = {}
+            end
+
+            cheat_client.start_hoppa_boost = start_hoppa_boost
+            cheat_client.stop_hoppa_boost = stop_hoppa_boost
+
+            if Toggles and Toggles.HoppaBoost and Toggles.HoppaBoost.Value then
+                start_hoppa_boost()
             end
         end
 

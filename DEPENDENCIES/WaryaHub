@@ -26673,9 +26673,9 @@ end
             local HOPPA_Y_TOLERANCE = 0.5
             local HOPPA_Y_BOOSTS = {
                 [50] = 85,
-                [100] = 200,
-                [200] = 250,
-                [400] = 450,
+                [100] = 160,
+                [200] = 230,
+                [400] = 430,
             }
 
             -- [BodyVelocity] = locked boosted Y value. false means waiting for a source Y value.

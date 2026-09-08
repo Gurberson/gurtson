@@ -26107,6 +26107,32 @@ end
                             end
 
                             local first_object = artifact_objects[1]
+
+                            -- Optional named artifact spots. These are additive to the normal AreaMarker name.
+                            -- Each spot is a true 3D radius; if radii overlap, the closest matching spot wins.
+                            local custom_artifact_locations = {
+                                {position = Vector3.new(4182, 819.075, -171), radius = 15, name = "Necro Tree"},
+                                {position = Vector3.new(4243, 708.044, -64), radius = 50, name = "Necro Church"},
+                                {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab"},
+                                {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab"},
+                                {position = Vector3.new(6577, 1347.994, 474), radius = 200, name = "Sigil"},
+                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 65, name = "Castle Sanc Roof"},
+                                {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney"},
+                                {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer"},
+                                {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer"},
+                                {position = Vector3.new(1054.855, 194.368, -3217), radius = 10, name = "Deepforest 2 button place"},
+                                {position = Vector3.new(1091, 189.868, -3477), radius = 60, name = "Sunken Pit"},
+                                {position = Vector3.new(1220, 156.868, -3720), radius = 85, name = "Sunken Right Side"},
+                                {position = Vector3.new(1347, 185.868, -3348), radius = 25, name = "Sunken Right Then take another right"},
+                                {position = Vector3.new(1007, -456.29, -4327), radius = 25, name = "Crystal Cave"},
+                                {position = Vector3.new(1166, -254.6, -4566), radius = 50, name = "DSK trainer pathway"},
+                                {position = Vector3.new(-284, 299.594, 42), radius = 7, name = "Top of Sentinel Entrance"},
+                                {position = Vector3.new(-268, 513.555, 1069.167), radius = 80, name = "Left side of Tower on the wall"},
+                                {position = Vector3.new(-1180, 863.189, 2651), radius = 100, name = "Spy Tower"},
+                                {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers"},
+                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House"},
+                            }
+
                             local function detectArtifactArea()
                                 if not FindFirstChild(ws, "AreaMarkers") then return "None" end
 
@@ -26127,8 +26153,36 @@ end
                                 return LocationName
                             end
 
+                            local function detectCustomArtifactLocation()
+                                local artifactPos = first_object.Position
+                                local closestName = nil
+                                local closestDistanceSq = math.huge
+
+                                for _, location in ipairs(custom_artifact_locations) do
+                                    local diff = artifactPos - location.position
+                                    local distanceSq = diff.X * diff.X + diff.Y * diff.Y + diff.Z * diff.Z
+                                    local radiusSq = location.radius * location.radius
+
+                                    if distanceSq <= radiusSq and distanceSq < closestDistanceSq then
+                                        closestDistanceSq = distanceSq
+                                        closestName = location.name
+                                    end
+                                end
+
+                                return closestName
+                            end
+
                             local area = detectArtifactArea()
-                            local area_text = area ~= "None" and " ("..area..")" or ""
+                            local custom_location = detectCustomArtifactLocation()
+                            local area_text = ""
+
+                            if area ~= "None" and custom_location then
+                                area_text = " ("..area.." | "..custom_location..")"
+                            elseif area ~= "None" then
+                                area_text = " ("..area..")"
+                            elseif custom_location then
+                                area_text = " ("..custom_location..")"
+                            end
 
                             local artifact_list = table.concat(artifact_names, ", ")
                             local msg = string.format("✨ Artifact%s Spawned: %s%s",

@@ -654,6 +654,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             webhook = "",
             cr_alert_webhook = "",
             green_webhook = "",
+            data_webhook = "",
             webhook_username = "bladee",
             dayfarm_webhook = "",
             show_in_artifact_stream = false,
@@ -6922,6 +6923,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         shared_settings.webhook = cheat_client.config.webhook or ""
                         shared_settings.cr_alert_webhook = cheat_client.config.cr_alert_webhook or ""
                         shared_settings.green_webhook = cheat_client.config.green_webhook or ""
+                        shared_settings.data_webhook = cheat_client.config.data_webhook or ""
                         shared_settings.show_in_artifact_stream = cheat_client.config.show_in_artifact_stream or false
                         mem:SetItem("shared_settings", httpService:JSONEncode(shared_settings))
                     end)
@@ -7405,6 +7407,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     cheat_client.config.green_webhook = shared_settings.green_webhook
                                     if library.Options and library.Options.green_webhook_url then
                                         library.Options.green_webhook_url:SetValue(shared_settings.green_webhook)
+                                    end
+                                end
+                                if shared_settings.data_webhook then
+                                    cheat_client.config.data_webhook = shared_settings.data_webhook
+                                    if library.Options and library.Options.data_webhook_url then
+                                        library.Options.data_webhook_url:SetValue(shared_settings.data_webhook)
                                     end
                                 end
                                 if shared_settings.webhook_username then
@@ -17355,6 +17363,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 Options.green_webhook_url:SetValue(shared_settings.green_webhook)
                             end
                         end
+                        if shared_settings.data_webhook then
+                            cheat_client.config.data_webhook = shared_settings.data_webhook
+                            if Options.data_webhook_url then
+                                Options.data_webhook_url:SetValue(shared_settings.data_webhook)
+                            end
+                        end
                         if shared_settings.webhook_username then
                             cheat_client.config.webhook_username = shared_settings.webhook_username
                             if Options.webhook_username then
@@ -20403,6 +20417,56 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 end
                             end
                             shared_settings.green_webhook = ""
+                            mem:SetItem("shared_settings", httpService:JSONEncode(shared_settings))
+                        end)
+                    end
+                end
+            })
+
+            group_ui:AddInput("data_webhook_url", {
+                Default = cheat_client.config.data_webhook,
+                Numeric = false,
+                Finished = false,
+                Text = "Data Webhook URL (press enter to apply)",
+                Tooltip = "Only logs artifacts with no specific/custom location; sends area and artifact position only (persists across serverhops)",
+                Placeholder = "https://discord.com/api/webhooks/...",
+                Callback = function(value)
+                    if value and value ~= "" then
+                        if value:match("^https://discord.com/api/webhooks/%d+/%S+$") then
+                            cheat_client.config.data_webhook = value
+
+                            local httpService = Services.HttpService
+                            pcall(function()
+                                local shared_settings = {}
+                                if mem:HasItem("shared_settings") then
+                                    local success, loaded = pcall(function()
+                                        return httpService:JSONDecode(mem:GetItem("shared_settings"))
+                                    end)
+                                    if success and loaded then
+                                        shared_settings = loaded
+                                    end
+                                end
+                                shared_settings.data_webhook = value
+                                mem:SetItem("shared_settings", httpService:JSONEncode(shared_settings))
+                            end)
+                        else
+                            library:Notify("Invalid data webhook URL format!")
+                        end
+                    else
+                        cheat_client.config.data_webhook = ""
+
+                        local httpService = Services.HttpService
+                        pcall(function()
+                            local shared_settings = {}
+                            if mem:HasItem("shared_settings") then
+                                local success, loaded = pcall(function()
+                                    return httpService:JSONDecode(mem:GetItem("shared_settings"))
+                                end)
+                                if success and loaded then
+                                    shared_settings = loaded
+                                end
+                            end
+                            shared_settings.data_webhook = ""
                             mem:SetItem("shared_settings", httpService:JSONEncode(shared_settings))
                         end)
                     end
@@ -26116,12 +26180,7 @@ end
                                 {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab"},
                                 {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab"},
                                 {position = Vector3.new(6577, 1347.994, 474), radius = 200, name = "Sigil"},
-                              	{position = Vector3.new(6093, 1452.131, 159.217), radius = 65, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6237.284, 1444.483, 79.872), radius = 22, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6390, 1449.131, 78.217), radius = 22, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6390, 1445.131, 177.217), radius = 22, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6455, 1445.131, 30.217), radius = 22, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6580, 1448.131, 28.217), radius = 22, name = "Castle Sanc Roof"},
+                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 65, name = "Castle Sanc Roof"},
                                 {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney"},
                                 {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer"},
                                 {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer"},
@@ -26322,6 +26381,32 @@ end
                                         content = webhook_msg,
                                         embeds = {embed}
                                     })
+                                end)
+                            end
+
+                            -- Data webhook: only unknown/unmapped artifact spots (no second/custom location).
+                            -- Keep this intentionally minimal so it can be used to collect new location data.
+                            if not custom_location and cheat_client.config.data_webhook and cheat_client.config.data_webhook ~= "" then
+                                local data_embed = {
+                                    title = string.format("%s | DATA", artifact_list),
+                                    description = string.format(
+                                        "**Location:** %s\n**Position:** `%.3f, %.3f, %.3f`",
+                                        area ~= "None" and area or "Unknown",
+                                        artifact_position.X,
+                                        artifact_position.Y,
+                                        artifact_position.Z
+                                    ),
+                                    color = 0xff3679,
+                                    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                                }
+
+                                task.spawn(function()
+                                    pcall(function()
+                                        HXD_SEND_WEBHOOK(cheat_client.config.data_webhook, {
+                                            username = cheat_client.config.webhook_username or "bladee",
+                                            embeds = {data_embed}
+                                        })
+                                    end)
                                 end)
                             end
 

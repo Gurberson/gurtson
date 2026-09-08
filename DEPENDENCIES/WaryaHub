@@ -26116,7 +26116,7 @@ end
                                 {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab"},
                                 {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab"},
                                 {position = Vector3.new(6577, 1347.994, 474), radius = 200, name = "Sigil"},
-                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 65, name = "Castle Sanc Roof"},
+                              	{position = Vector3.new(6093, 1452.131, 159.217), radius = 65, name = "Castle Sanc Roof"},
 								{position = Vector3.new(6237.284, 1444.483, 79.872), radius = 22, name = "Castle Sanc Roof"},
 								{position = Vector3.new(6390, 1449.131, 78.217), radius = 22, name = "Castle Sanc Roof"},
 								{position = Vector3.new(6390, 1445.131, 177.217), radius = 22, name = "Castle Sanc Roof"},
@@ -26280,9 +26280,13 @@ end
                                 description = description .. string.format("**Point:** %d (%.0f studs)\n", nearest_point_index, nearest_point_distance)
                             end
 
-                            description = description .. string.format("**Server:** `%s (%s)`\n\n",
+                            local artifact_position = first_object.Position
+                            description = description .. string.format("**Server:** `%s (%s)`\n**Position:** `%.3f, %.3f, %.3f`\n\n",
                                 server_name ~= "" and server_name or "Unknown",
-                                server_region ~= "" and server_region or "Unknown"
+                                server_region ~= "" and server_region or "Unknown",
+                                artifact_position.X,
+                                artifact_position.Y,
+                                artifact_position.Z
                             )
 
                             description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" ) .. "\n\n"

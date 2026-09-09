@@ -587,6 +587,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             bag_range = 80,
             reequip_gate_in_loop = true,
             hold_pebble_in_loop = false,
+            auto_pop_idol_of_war = false,
 
 
             temperature_lock = false,
@@ -12593,6 +12594,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 session_start_time = 0,
                 moderator_detected = false,
                 gate_in_progress = false,
+                idol_pop_in_progress = false,
                 pending_artifact_logs = {},
                 pending_pickup_ids = {}
             }
@@ -15119,7 +15121,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     local humanoid = FindFirstChildOfClass(plr.Character, "Humanoid")
                     local pebble_mode = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value
 
-                    if humanoid and pebble_mode then
+                    if humanoid and pebble_mode and (not trinket_bot.idol_pop_in_progress or trinket_bot.gate_in_progress) then
                         if trinket_bot.gate_in_progress then
                             local gate_in_backpack = FindFirstChild(plr.Backpack, "Gate")
                             local gate_equipped = FindFirstChild(plr.Character, "Gate")
@@ -15140,7 +15142,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 end
                             end
                         end
-                    elseif Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
+                    elseif not trinket_bot.idol_pop_in_progress and Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
                         local gate_in_backpack = FindFirstChild(plr.Backpack, "Gate")
                         local gate_equipped = FindFirstChild(plr.Character, "Gate")
                         if gate_in_backpack and not gate_equipped and humanoid then
@@ -18844,6 +18846,79 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.hold_pebble_in_loop,
                 Tooltip = "Keeps Pebble equipped while looting; Gate automatically takes priority during gate attempts"
             })
+
+            group_trinket_looping:AddToggle("AutoPopIdolOfWar", {
+                Text = "Auto Pop Idol of Wars",
+                Default = cheat_client.config.auto_pop_idol_of_war,
+                Tooltip = "Automatically equips and uses Idol of War until it is consumed, then repeats for the next one",
+                Callback = function(value)
+                    cheat_client.config.auto_pop_idol_of_war = value
+                    if not value then
+                        trinket_bot.idol_pop_in_progress = false
+                    end
+                end
+            })
+
+            local IDOL_ITEM = "Idol of War"
+            local IDOL_LOOP_INTERVAL = 0.6
+            local IDOL_USE_DELAY = 0.5
+
+            local function click_idol_of_war()
+                pcall(function()
+                    vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                    task.wait(0.01)
+                    vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                end)
+            end
+
+            task.spawn(function()
+                while shared and not shared.is_unloading do
+                    task.wait(IDOL_LOOP_INTERVAL)
+
+                    local enabled = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value
+                    if not enabled or trinket_bot.gate_in_progress then
+                        trinket_bot.idol_pop_in_progress = false
+                        continue
+                    end
+
+                    local character = plr.Character
+                    local humanoid = character and FindFirstChildOfClass(character, "Humanoid")
+                    local backpack = plr:FindFirstChildOfClass("Backpack")
+                    local idol = backpack and FindFirstChild(backpack, IDOL_ITEM)
+
+                    if humanoid and idol and idol:IsA("Tool") then
+                        trinket_bot.idol_pop_in_progress = true
+
+                        pcall(function()
+                            humanoid:EquipTool(idol)
+                            task.wait(IDOL_USE_DELAY)
+
+                            while shared and not shared.is_unloading do
+                                if not (Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value) then
+                                    break
+                                end
+
+                                if trinket_bot.gate_in_progress then
+                                    break
+                                end
+
+                                character = plr.Character
+                                local equipped_idol = character and FindFirstChild(character, IDOL_ITEM)
+                                if not equipped_idol or not equipped_idol:IsA("Tool") then
+                                    break
+                                end
+
+                                click_idol_of_war()
+                                task.wait(IDOL_USE_DELAY)
+                            end
+                        end)
+
+                        trinket_bot.idol_pop_in_progress = false
+                    end
+                end
+
+                trinket_bot.idol_pop_in_progress = false
+            end)
 
             group_trinket_looping:AddSlider("TimeBetweenLooting", {
                 Text = "Time Between Looting",

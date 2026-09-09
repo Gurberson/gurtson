@@ -13716,6 +13716,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                     reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                     hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
+                    auto_pop_idol_of_war = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value or false,
                     time_between_looting = Options.TimeBetweenLooting and Options.TimeBetweenLooting.Value or 5,
                     proximity_check = Options.ProximityCheck and Options.ProximityCheck.Value or 0,
                     critical_distance = Options.CriticalDistance and Options.CriticalDistance.Value or 60,
@@ -17611,6 +17612,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if Toggles.StayInServer then Toggles.StayInServer:SetValue(settings.stay_in_server or false) end
                 if Toggles.ReequipGateInLoop then Toggles.ReequipGateInLoop:SetValue(settings.reequip_gate_in_loop == nil and true or settings.reequip_gate_in_loop) end
                 if Toggles.HoldPebbleInLoop then Toggles.HoldPebbleInLoop:SetValue(settings.hold_pebble_in_loop or false) end
+                if Toggles.AutoPopIdolOfWar then Toggles.AutoPopIdolOfWar:SetValue(settings.auto_pop_idol_of_war or false) end
                 if Options.TimeBetweenLooting then Options.TimeBetweenLooting:SetValue(settings.time_between_looting or 5) end
                 if Options.ProximityCheck then Options.ProximityCheck:SetValue(settings.proximity_check or 0) end
                 if Options.CriticalDistance then Options.CriticalDistance:SetValue(settings.critical_distance or 60) end
@@ -18584,6 +18586,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                             reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                             hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
+                            auto_pop_idol_of_war = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value or false,
                             time_between_looting = Options.TimeBetweenLooting and Options.TimeBetweenLooting.Value or 5,
                             proximity_check = Options.ProximityCheck and Options.ProximityCheck.Value or 0,
                             critical_distance = Options.CriticalDistance and Options.CriticalDistance.Value or 60,

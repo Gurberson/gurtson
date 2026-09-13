@@ -26531,30 +26531,34 @@ end
                             -- Optional named artifact spots. These are additive to the normal AreaMarker name.
                             -- Each spot is a true 3D radius; if radii overlap, the closest matching spot wins.
                             local custom_artifact_locations = {
-                                {position = Vector3.new(4182, 819.075, -171), radius = 15, name = "Necro Tree"},
-                                {position = Vector3.new(4243, 708.044, -64), radius = 50, name = "Necro Church"},
-                                {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab"},
-                                {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab"},
-                                {position = Vector3.new(6577, 1347.994, 474), radius = 266, name = "Sigil"},
-                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 33, name = "Castle Sanc Roof"},
-                              	{position = Vector3.new(6093, 1452.131, 159.217), radius = 33, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6237.284, 1444.483, 79.872), radius = 33, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6390, 1449.131, 78.217), radius = 33, name = "Castle Sanc Roof"},
-								{position = Vector3.new(6390, 1445.131, 177.217), radius = 33, name = "Castle Sanc Roof"},
-                                {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney"},
-                                {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer"},
-                                {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer"},
-                                {position = Vector3.new(1054.855, 194.368, -3217), radius = 10, name = "Deepforest 2 button place"},
-                                {position = Vector3.new(1091, 189.868, -3477), radius = 60, name = "Sunken Pit"},
-                                {position = Vector3.new(1220, 156.868, -3720), radius = 85, name = "Sunken Right Side"},
-                                {position = Vector3.new(1347, 185.868, -3348), radius = 25, name = "Sunken Right Then take another right"},
-                                {position = Vector3.new(1007, -456.29, -4327), radius = 25, name = "Crystal Cave"},
-                                {position = Vector3.new(1166, -254.6, -4566), radius = 50, name = "DSK trainer pathway"},
-                                {position = Vector3.new(-284, 299.594, 42), radius = 7, name = "Top of Sentinel Entrance"},
-                                {position = Vector3.new(-268, 513.555, 1069.167), radius = 80, name = "Left side of Tower on the wall"},
-                                {position = Vector3.new(-1180, 863.189, 2651), radius = 100, name = "Spy Tower"},
-                                {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers"},
-                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House"},
+                                {position = Vector3.new(4182, 819.075, -171), radius = 15, name = "Necro Tree", image = "https://i.imgur.com/ki1vO4H.png"},
+                                {position = Vector3.new(4243, 708.044, -64), radius = 50, name = "Necro Church", image = "https://i.imgur.com/r0EWJYP.png"},
+                                {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab", image = "https://i.imgur.com/hqNGjmH.png"},
+                                {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab", image = "https://i.imgur.com/zVUCHah.png"},
+                                {position = Vector3.new(6577, 1347.994, 474), radius = 266, name = "Sigil", image = "https://i.imgur.com/mWRb4R8.png"},
+                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/np3CVxA.png"},
+                                {position = Vector3.new(6237.284, 1444.483, 79.872), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/np3CVxA.png"},
+                                {position = Vector3.new(6390, 1449.131, 78.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/np3CVxA.png"},
+                                {position = Vector3.new(6390, 1445.131, 177.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/np3CVxA.png"},
+                                {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney", image = "https://i.imgur.com/bdUjxXW.png"},
+                                {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer", image = "https://i.imgur.com/MNMI23b.png"},
+                                {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer", image = "https://i.imgur.com/f3iJLVF.png"},
+                                {position = Vector3.new(1054.855, 194.368, -3217), radius = 15, name = "Deepforest 2 button place", image = "https://i.imgur.com/uyHEZyD.png"},
+                                {position = Vector3.new(1091, 189.868, -3477), radius = 60, name = "Sunken Pit", image = "https://i.imgur.com/a1U6iD6.png"},
+                                {position = Vector3.new(1220, 156.868, -3720), radius = 115, name = "Sunken Right Side", image = "https://i.imgur.com/Gggr7fQ.png"},
+                                {position = Vector3.new(1347, 185.868, -3348), radius = 33, name = "Sunken Right Then take another right", image = "https://i.imgur.com/EPurJvF.png"},
+                                {position = Vector3.new(1007, -456.29, -4327), radius = 33, name = "Crystal Cave", image = "https://i.imgur.com/8Qajyv6.png"},
+                                {position = Vector3.new(1166, -254.6, -4566), radius = 50, name = "DSK trainer pathway", image = "https://i.imgur.com/TtMGjCi.png"},
+                                {position = Vector3.new(-284, 299.594, 42), radius = 7, name = "Top of Sentinel Entrance", image = "https://i.imgur.com/VinqVum.png"},
+                                {position = Vector3.new(-281.197, 516.939, 1109.766), radius = 80, name = "Left side of Tower on the wall", image = "https://i.imgur.com/j0VnlDY.png"},
+                                {position = Vector3.new(-1180, 863.189, 2651), radius = 155, name = "Spy Tower", image = "https://i.imgur.com/RMqmuZG.png"},
+                                {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers", image = "https://i.imgur.com/2G1nfPw.png"},
+                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House", image = "https://i.imgur.com/Dqmrr0r.png"},
+                            }
+
+                            -- Broad AreaMarker image fallbacks. Only used when no exact/custom location matched.
+                            local general_artifact_area_images = {
+                                {match = "Sigma", image = "https://i.imgur.com/JcWwF5C.png"},
                             }
 
                             local function detectArtifactArea()
@@ -26579,7 +26583,7 @@ end
 
                             local function detectCustomArtifactLocation()
                                 local artifactPos = first_object.Position
-                                local closestName = nil
+                                local closestLocation = nil
                                 local closestDistanceSq = math.huge
 
                                 for _, location in ipairs(custom_artifact_locations) do
@@ -26589,15 +26593,36 @@ end
 
                                     if distanceSq <= radiusSq and distanceSq < closestDistanceSq then
                                         closestDistanceSq = distanceSq
-                                        closestName = location.name
+                                        closestLocation = location
                                     end
                                 end
 
-                                return closestName
+                                return closestLocation
+                            end
+
+                            local function detectGeneralArtifactImage(areaName)
+                                if not areaName or areaName == "None" then return nil end
+
+                                local loweredArea = string.lower(tostring(areaName))
+                                for _, rule in ipairs(general_artifact_area_images) do
+                                    if string.find(loweredArea, string.lower(rule.match), 1, true) then
+                                        return rule.image
+                                    end
+                                end
+
+                                return nil
                             end
 
                             local area = detectArtifactArea()
-                            local custom_location = detectCustomArtifactLocation()
+                            local custom_location_data = detectCustomArtifactLocation()
+                            local custom_location = custom_location_data and custom_location_data.name or nil
+                            local artifact_location_image = custom_location_data and custom_location_data.image or nil
+
+                            -- Exact/custom locations always win. General-area images are fallback-only.
+                            if not custom_location then
+                                artifact_location_image = detectGeneralArtifactImage(area)
+                            end
+
                             local area_text = ""
 
                             if area ~= "None" and custom_location then
@@ -26708,11 +26733,12 @@ end
                                 artifact_position.Z
                             )
 
-                            description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" ) .. "\n\n"
-
+                            -- Keep the player list as the final description section so the embed image renders directly below it.
                             description = description .. string.format("> Castle Rock: %s\n", get_last_looted("cr"))
                             description = description .. string.format("> Sunken: %s\n", get_last_looted("deepsunken"))
-                            description = description .. string.format("> Temple of Fire: %s", get_last_looted("temple"))
+                            description = description .. string.format("> Temple of Fire: %s\n\n", get_last_looted("temple"))
+
+                            description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" )
 
                             local footer_text
                             if cheat_client.config.webhook_show_username ~= false then
@@ -26728,6 +26754,9 @@ end
                                 thumbnail = {
                                     url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                 },
+                                image = artifact_location_image and {
+                                    url = artifact_location_image
+                                } or nil,
                                 footer = {
                                     text = footer_text
                                 },
@@ -26809,6 +26838,9 @@ end
                                     thumbnail = {
                                         url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                     },
+                                    image = artifact_location_image and {
+                                        url = artifact_location_image
+                                    } or nil,
                                     footer = {
                                         text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
                                     },
@@ -26840,6 +26872,9 @@ end
                                         thumbnail = {
                                             url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                         },
+                                        image = artifact_location_image and {
+                                            url = artifact_location_image
+                                        } or nil,
                                         footer = {
                                             text = string.format("Players: %d/23 | %s | Job: %s", player_count, plr.Name, game.JobId)
                                         },

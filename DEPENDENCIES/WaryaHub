@@ -26553,12 +26553,12 @@ end
                                 {position = Vector3.new(-281.197, 516.939, 1109.766), radius = 80, name = "Left side of Tower on the wall", image = "https://i.imgur.com/j0VnlDY.png"},
                                 {position = Vector3.new(-1180, 863.189, 2651), radius = 155, name = "Spy Tower", image = "https://i.imgur.com/RMqmuZG.png"},
                                 {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers", image = "https://i.imgur.com/2G1nfPw.png"},
-                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House", image = "https://i.imgur.com/Dqmrr0r.png"},
+                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House"},
                             }
 
                             -- Broad AreaMarker image fallbacks. Only used when no exact/custom location matched.
                             local general_artifact_area_images = {
-                                {match = "Sigma", image = "https://i.imgur.com/JcWwF5C.png"},
+                                {match = "Sigma", image = "https://i.imgur.com/JcWwF5C.png", send_data = false},
                             }
 
                             local function detectArtifactArea()
@@ -26600,13 +26600,13 @@ end
                                 return closestLocation
                             end
 
-                            local function detectGeneralArtifactImage(areaName)
+                            local function detectGeneralArtifactArea(areaName)
                                 if not areaName or areaName == "None" then return nil end
 
                                 local loweredArea = string.lower(tostring(areaName))
                                 for _, rule in ipairs(general_artifact_area_images) do
                                     if string.find(loweredArea, string.lower(rule.match), 1, true) then
-                                        return rule.image
+                                        return rule
                                     end
                                 end
 
@@ -26616,11 +26616,24 @@ end
                             local area = detectArtifactArea()
                             local custom_location_data = detectCustomArtifactLocation()
                             local custom_location = custom_location_data and custom_location_data.name or nil
-                            local artifact_location_image = custom_location_data and custom_location_data.image or nil
+                            local general_area_data = not custom_location and detectGeneralArtifactArea(area) or nil
+                            local artifact_location_image = custom_location_data and custom_location_data.image
+                                or (general_area_data and general_area_data.image)
+                                or nil
 
-                            -- Exact/custom locations always win. General-area images are fallback-only.
+                            -- Exact/custom locations always win. General-area rules are fallback-only.
+                            -- Data collection rules:
+                            --   exact/custom match              -> never send DATA
+                            --   general fallback send_data=false -> do not send DATA
+                            --   general fallback send_data=true  -> send DATA
+                            --   no general fallback              -> send DATA by default
+                            local should_send_data = false
                             if not custom_location then
-                                artifact_location_image = detectGeneralArtifactImage(area)
+                                if general_area_data then
+                                    should_send_data = general_area_data.send_data == true
+                                else
+                                    should_send_data = true
+                                end
                             end
 
                             local area_text = ""
@@ -26773,9 +26786,9 @@ end
                                 end)
                             end
 
-                            -- Data webhook: only unknown/unmapped artifact spots (no second/custom location).
-                            -- Keep this intentionally minimal so it can be used to collect new location data.
-                            if not custom_location and cheat_client.config.data_webhook and cheat_client.config.data_webhook ~= "" then
+                            -- Data webhook: controlled per general-area fallback.
+                            -- Exact/custom spots never send DATA. Unmatched areas collect DATA by default.
+                            if should_send_data and cheat_client.config.data_webhook and cheat_client.config.data_webhook ~= "" then
                                 local data_embed = {
                                     title = string.format("%s | DATA", artifact_list),
                                     description = string.format(

@@ -28355,11 +28355,33 @@ end
                                 {position = Vector3.new(-1180, 863.189, 2651), radius = 155, name = "Spy Tower", image = "https://i.imgur.com/RMqmuZG.png"},
                                 {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers", image = "https://i.imgur.com/unXqZH3.png"},
                                 {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House", image = "https://i.imgur.com/ocLZfzr.png"},
+                                {position = Vector3.new(4901.285, 1007.794, 1373.176), radius = 77, name = "Top of Dragonpit", image = "https://i.imgur.com/xb8b8UM.png"},
+                                {position = Vector3.new(-101.77, 3780.89, 140.2), radius = 135, name = "Gacha Room", image = "https://i.imgur.com/MBl5mOy.png"},
+                                {position = Vector3.new(-214.52, 3814.89, 141.2), radius = 83, name = "Skycastle Pillars", image = "https://i.imgur.com/ibYWCuX.png"},
+                                {position = Vector3.new(630.73, 3761.39, -55.3), radius = 122, name = "Room Above Gate ", image = "https://i.imgur.com/4zwi2Zy.png"},
+                                {position = Vector3.new(544.98, 3636.39, -158.3), radius = 77, name = "Room Below Skycastle", image = "https://i.imgur.com/N6WsK3q.png"},
+                                {position = Vector3.new(4901.285, 1007.794, 1373.176), radius = 77, name = "The Tip of Skycastle", image = "https://i.imgur.com/FC0ZmkR.png"},
+                                {position = Vector3.new(372, 3777.64, -7), radius = 66, name = "Under a Starry Night", image = "https://i.imgur.com/SExE3Qx.png"},
+                                {position = Vector3.new(5790.538, 1431.794, 860.062), radius = 77, name = "Top of Snail", image = "https://i.imgur.com/ps4dA0s.png"},
+                                {position = Vector3.new(4003, 443.794, -1017), radius = 160, name = "Snake Pit", image = "https://i.imgur.com/SlWbHjP.png"},
+                                {position = Vector3.new(3208.855, 124.868, -2453.623), radius = 15, name = "Behind Crates", image = "https://i.imgur.com/2XATSr3.png"},
+                                {position = Vector3.new(3270.355, 207.368, -2535.123), radius = 16, name = "Side of Inn", image = "https://i.imgur.com/e9HDhYp.png"},
+                                {position = Vector3.new(3340.355, 202.368, -2468.123), radius = 20, name = "Inn Beds", image = "https://i.imgur.com/O2ytyLr.png"},
+                                {position = Vector3.new(3060.355, 135.368, -2537.123), radius = 25, name = "Side of Turnip Shop", image = "https://i.imgur.com/pIOF2oI.png"},
+                                {position = Vector3.new(3162.355, 141.368, -2540.123), radius = 44, name = "Top of Weapon Shop", image = "https://i.imgur.com/Cq5V3W6.png"},
+                                {position = Vector3.new(1099.355, 213.368, -2874.123), radius = 30, name = "Ruins #1", image = "https://i.imgur.com/G5S3e2s.png"},
+                                {position = Vector3.new(1143.855, 165.868, -3097.623), radius = 30, name = "Sneaky Corner", image = "https://i.imgur.com/rsGDypV.png"},
+                                {position = Vector3.new(3315.355, 200.368, -2533.123), radius = 35, name = "Flowerlight Innkeeper", image = "https://i.imgur.com/KimrWhI.png"},
+                                {position = Vector3.new(1134.355, 199.368, -3080.123), radius = 25, name = "Ruins #2", image = "https://i.imgur.com/mYymEwv.png"},
                             }
 
                             -- Broad AreaMarker image fallbacks. Only used when no exact/custom location matched.
                             local general_artifact_area_images = {
                                 {match = "Sigma", image = "https://i.imgur.com/z4hntjV.png", send_data = false},
+                                {match = "the Sky", image = "https://i.imgur.com/p0MPHct.png", send_data = true},
+                                {match = "Snail", image = "https://i.imgur.com/d4w42MY.png", send_data = true},
+                                {match = "Temple of Fire", image = "https://i.imgur.com/DEbxHhg.png", send_data = true},
+                                {match = "Flowerlight", image = "https://i.imgur.com/8KbMjfp.png", send_data = true},
                             }
 
                             local function detectArtifactArea()

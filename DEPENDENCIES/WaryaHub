@@ -5,7 +5,7 @@ if not game:IsLoaded() then
 end
 
 local DEFAULT_RAW = getgenv().hydroxide_raw or "https://git.fable.bz/zyu/hydroxide/raw/branch/main/"
-local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/DEPENDENCIES/WaryaHub"
+local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/refs/heads/main/TESTINGDONOTUSE"
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(1)
@@ -308,7 +308,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
     local is_gaia = game.PlaceId == 5208655184;
     local is_khei = game.PlaceId == 3541987450 or game.PlaceId == 14341521240;
 
-    local updatePlayerLabel, getPlayerColor, getNaturalPlayerColor
+    local updatePlayerLabel, getPlayerColor
     local last_area_restore = nil
     local ingredient_folder = nil
     local auto_pot_active = false
@@ -335,10 +335,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
     local proximity_connection
 
     local streamer_connections = {}
-    -- Track the per-character first-name Model used by Rogue so streamer mode can
-    -- rename it on the same CharacterAdded/ChildAdded turn without duplicate hooks.
-    local streamer_character_model_watchers = setmetatable({}, {__mode = "k"})
-    local streamer_character_model_locks = setmetatable({}, {__mode = "k"})
     local ragoozer_frame = nil
     local disabled_connections = {}
 
@@ -551,7 +547,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             no_blur = false,
             no_sanity = false,
             better_leaderboard = true,
-            disable_colored_names = false,
             fullbright = false,
             brightness_level = 80,
             change_time = false,
@@ -592,7 +587,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             bag_range = 80,
             reequip_gate_in_loop = true,
             hold_pebble_in_loop = false,
-            auto_pop_idol_of_war = false,
 
 
             temperature_lock = false,
@@ -670,16 +664,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             spoof_days_enabled = false,
 
             char_custom_enabled = false,
-            metal_arm = false,
-            edict_spoof = false,
-            char_custom_edict = "Blademaster",
             char_custom_face = "",
             char_custom_shirt = "",
             char_custom_pants = "",
             char_custom_accessories = "",
             char_custom_skin_color = Color3.fromRGB(255, 253, 247),
             char_custom_rlface_color = Color3.fromRGB(255, 253, 247),
-            char_custom_hair_color = Color3.fromRGB(255, 253, 247),
             char_custom_clothing_dye = Color3.fromRGB(255, 253, 247),
             outfit_shirt_color = nil,
             outfit_pants_color = nil,
@@ -3787,284 +3777,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end)
             end
 
-            -- Banned kick logger
-            -- Captures the kick/disconnect reason and posts every player seen in the
-            -- server at that moment to the configured main webhook.
-            do
-                local banned_kick_reported = false
-                local banned_kick_roster_cache = {}
-                local watched_prompt_guis = setmetatable({}, {__mode = "k"})
-                local watched_prompt_text = setmetatable({}, {__mode = "k"})
-
-                local function remember_player(player)
-                    if not player then return end
-
-                    banned_kick_roster_cache[player.UserId] = {
-                        name = player.Name,
-                        user_id = player.UserId,
-                        last_seen = os.clock(),
-                    }
-                end
-
-                local function refresh_roster_cache()
-                    local now = os.clock()
-
-                    for _, player in ipairs(plrs:GetPlayers()) do
-                        remember_player(player)
-                    end
-
-                    -- Keep a short grace window so a disconnect teardown cannot erase
-                    -- the roster before the kick reason becomes visible.
-                    for user_id, data in pairs(banned_kick_roster_cache) do
-                        if now - (data.last_seen or 0) > 10 then
-                            banned_kick_roster_cache[user_id] = nil
-                        end
-                    end
-                end
-
-                refresh_roster_cache()
-
-                utility:Connection(plrs.PlayerAdded, function(player)
-                    remember_player(player)
-                end)
-
-                utility:Connection(plrs.PlayerRemoving, function(player)
-                    -- Do not immediately delete it. A real kick can cause Roblox to begin
-                    -- tearing down Players before the disconnect prompt text is readable.
-                    local cached = banned_kick_roster_cache[player.UserId]
-                    if cached then
-                        cached.last_seen = os.clock()
-                    else
-                        remember_player(player)
-                    end
-                end)
-
-                task.spawn(function()
-                    while shared and not shared.is_unloading and not banned_kick_reported do
-                        refresh_roster_cache()
-                        task.wait(0.25)
-                    end
-                end)
-
-                local function get_banned_kick_roster()
-                    local combined = {}
-                    local now = os.clock()
-
-                    -- Prefer the live Players list first.
-                    for _, player in ipairs(plrs:GetPlayers()) do
-                        combined[player.UserId] = {
-                            name = player.Name,
-                            user_id = player.UserId,
-                        }
-                        remember_player(player)
-                    end
-
-                    -- Also merge the very recent cache. This is what protects the list
-                    -- if Roblox starts removing Player objects during disconnect teardown.
-                    for user_id, data in pairs(banned_kick_roster_cache) do
-                        if now - (data.last_seen or 0) <= 2 then
-                            combined[user_id] = combined[user_id] or {
-                                name = data.name,
-                                user_id = data.user_id,
-                            }
-                        end
-                    end
-
-                    local roster = {}
-                    for _, data in pairs(combined) do
-                        roster[#roster + 1] = data
-                    end
-
-                    table.sort(roster, function(a, b)
-                        return string.lower(a.name) < string.lower(b.name)
-                    end)
-
-                    return roster
-                end
-
-                local function split_player_fields(roster)
-                    local fields = {}
-                    local current = ""
-                    local part = 1
-
-                    local function push_current()
-                        if current == "" then return end
-                        fields[#fields + 1] = {
-                            name = part == 1 and string.format("Players (%d)", #roster) or string.format("Players (%d) - Part %d", #roster, part),
-                            value = "```\n" .. current .. "```",
-                            inline = false,
-                        }
-                        current = ""
-                        part = part + 1
-                    end
-
-                    for _, data in ipairs(roster) do
-                        local line = string.format("%s (%s)\n", tostring(data.name), tostring(data.user_id))
-
-                        -- Discord embed field values cap at 1024 chars. Keep headroom for fences.
-                        if #current + #line > 940 then
-                            push_current()
-                        end
-
-                        current = current .. line
-                    end
-
-                    push_current()
-
-                    if #fields == 0 then
-                        fields[1] = {
-                            name = "Players (0)",
-                            value = "```\nNo players could be captured\n```",
-                            inline = false,
-                        }
-                    end
-
-                    return fields
-                end
-
-                local function report_banned_kick(reason)
-                    if banned_kick_reported then return end
-
-                    reason = tostring(reason or "")
-                    if reason == "" or not string.find(string.lower(reason), "banned", 1, true) then
-                        return
-                    end
-
-                    -- Set this before the request so the CoreGui + GuiService fallbacks
-                    -- cannot double-send the same disconnect.
-                    banned_kick_reported = true
-                    refresh_roster_cache()
-
-                    local roster = get_banned_kick_roster()
-                    local fields = split_player_fields(roster)
-
-                    table.insert(fields, 1, {
-                        name = "Kick Reason",
-                        value = "```\n" .. reason:gsub("```", "''' "):sub(1, 950) .. "\n```",
-                        inline = false,
-                    })
-
-                    fields[#fields + 1] = {
-                        name = "Server",
-                        value = string.format("Job ID: `%s`\nPlace ID: `%s`", tostring(game.JobId), tostring(game.PlaceId)),
-                        inline = false,
-                    }
-
-                    if not cheat_client.config.webhook or cheat_client.config.webhook == "" then
-                        return
-                    end
-
-                    local content = nil
-                    if cheat_client.config.webhook_show_username ~= false then
-                        content = string.format("||[**%s**]||", plr.Name)
-                    end
-
-                    local payload = {
-                        username = cheat_client.config.webhook_username or "bladee",
-                        content = content,
-                        embeds = {{
-                            title = "Banned Kick Detected",
-                            color = 0xFF3030,
-                            fields = fields,
-                            footer = {
-                                text = string.format("Captured %d player(s)", #roster)
-                            }
-                        }}
-                    }
-
-                    local ok, sent = pcall(function()
-                        return send_webhook(cheat_client.config.webhook, payload)
-                    end)
-
-                    -- One immediate retry if the request function reports failure.
-                    if not ok or sent == false then
-                        task.wait(0.15)
-                        pcall(function()
-                            send_webhook(cheat_client.config.webhook, payload)
-                        end)
-                    end
-                end
-
-                local function inspect_kick_message(message)
-                    message = tostring(message or "")
-                    if message ~= "" and string.find(string.lower(message), "banned", 1, true) then
-                        report_banned_kick(message)
-                    end
-                end
-
-                -- Catch client-side Player:Kick("...") calls before Roblox disconnects.
-                -- Server-side kicks do not necessarily pass through this hook, so the
-                -- GuiService/CoreGui watchers below are still required.
-                pcall(function()
-                    if hookfunction then
-                        local old_kick
-                        old_kick = hookfunction(plr.Kick, function(self, message, ...)
-                            if self == plr then
-                                inspect_kick_message(message)
-                            end
-                            return old_kick(self, message, ...)
-                        end)
-                    end
-                end)
-
-                -- Newer Roblox UI-message signal. This is protected by Roblox security in
-                -- normal LocalScripts, but some executors expose it, so keep it as a pcall fallback.
-                pcall(function()
-                    utility:Connection(gui.UiMessageChanged, function(_, new_message)
-                        inspect_kick_message(new_message)
-                    end)
-                end)
-
-                -- Legacy fallback for executors/clients where ErrorMessageChanged is exposed.
-                pcall(function()
-                    utility:Connection(gui.ErrorMessageChanged, function(new_message)
-                        inspect_kick_message(new_message)
-                    end)
-                end)
-
-                -- CoreGui fallback: watches Roblox's disconnect prompt text directly.
-                local function watch_prompt_text_object(obj)
-                    if not obj or watched_prompt_text[obj] then return end
-                    if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
-
-                    watched_prompt_text[obj] = true
-                    inspect_kick_message(obj.Text)
-
-                    pcall(function()
-                        utility:Connection(obj:GetPropertyChangedSignal("Text"), function()
-                            inspect_kick_message(obj.Text)
-                        end)
-                    end)
-                end
-
-                local function watch_prompt_gui(prompt_gui)
-                    if not prompt_gui or watched_prompt_guis[prompt_gui] then return end
-                    watched_prompt_guis[prompt_gui] = true
-
-                    for _, obj in ipairs(prompt_gui:GetDescendants()) do
-                        watch_prompt_text_object(obj)
-                    end
-
-                    utility:Connection(prompt_gui.DescendantAdded, function(obj)
-                        watch_prompt_text_object(obj)
-                    end)
-                end
-
-                if cg then
-                    for _, child in ipairs(cg:GetChildren()) do
-                        if child.Name == "RobloxPromptGui" then
-                            watch_prompt_gui(child)
-                        end
-                    end
-
-                    utility:Connection(cg.ChildAdded, function(child)
-                        if child.Name == "RobloxPromptGui" then
-                            watch_prompt_gui(child)
-                        end
-                    end)
-                end
-            end
-
             function utility:setup_error_webhook()
                 local ScriptContext = Services.ScriptContext
 
@@ -6418,189 +6130,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         end
 
         do
-            local function get_first_name_from_spoof(full_name)
-                if not full_name or full_name == "" then return nil end
-
-                local clean_name = tostring(full_name):split(",")[1]
-                clean_name = clean_name and clean_name:match("^%s*(.-)%s*$") or nil
-                if not clean_name or clean_name == "" then return nil end
-
-                local first_name = clean_name:split(" ")[1]
-                if first_name and first_name ~= "" then
-                    return first_name
-                end
-
-                return nil
-            end
-
-            local function get_original_character_first_name()
-                return get_first_name_from_spoof(original_names[plr])
-            end
-
-            local function get_active_spoof_model_name()
-                local spoof_name = cheat_client.config.custom_name_spoof
-                if not spoof_name or spoof_name == "" then
-                    spoof_name = cheat_client._streamer_spoof_name
-                end
-                if not spoof_name or spoof_name == "" then return nil end
-
-                -- The character's name Model should use the full spoofed character name
-                -- (First Last), but never include an optional UberTitle after a comma.
-                local clean_name = tostring(spoof_name):split(",")[1]
-                clean_name = clean_name and clean_name:match("^%s*(.-)%s*$") or nil
-                if clean_name and clean_name ~= "" then
-                    return clean_name
-                end
-
-                return nil
-            end
-
-            local function lock_character_name_model(model)
-                if not model or not model:IsA("Model") then return end
-
-                local existing = streamer_character_model_locks[model]
-                if existing and existing.Connected then
-                    return
-                end
-
-                local lock = utility:Connection(model:GetPropertyChangedSignal("Name"), function()
-                    if not (shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value) then
-                        return
-                    end
-
-                    local target_model_name = get_active_spoof_model_name()
-                    if target_model_name and model.Parent and model.Name ~= target_model_name then
-                        model.Name = target_model_name
-                    end
-                end)
-
-                streamer_character_model_locks[model] = lock
-                streamer_connections[#streamer_connections + 1] = lock
-            end
-
-            local function apply_character_name_model(model, target_model_name)
-                if not model or not model:IsA("Model") or not target_model_name or target_model_name == "" then
-                    return false
-                end
-
-                local original_first_name = get_original_character_first_name()
-                local is_name_model = model:GetAttribute("HXD_NameSpoofModel") == true
-                    or (original_first_name and model.Name == original_first_name)
-
-                if not is_name_model then
-                    return false
-                end
-
-                if not model:GetAttribute("HXD_NameSpoofModel") then
-                    model:SetAttribute("HXD_NameSpoofModel", true)
-                end
-
-                -- Same-turn write: if the game inserts e.g. Character.Devon, it becomes
-                -- Character.<spoofed First Last> immediately, before waiting a frame.
-                if model.Name ~= target_model_name then
-                    model.Name = target_model_name
-                end
-
-                if shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value then
-                    lock_character_name_model(model)
-                end
-
-                return true
-            end
-
-            local function setup_character_name_model_spoof(character, target_model_name)
-                if not character then return end
-
-                -- Handle the Model if it already exists by the time CharacterAdded fires.
-                for _, child in ipairs(character:GetChildren()) do
-                    if child:IsA("Model") then
-                        apply_character_name_model(child, target_model_name)
-                    end
-                end
-
-                if not (shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value) then
-                    return
-                end
-
-                local existing = streamer_character_model_watchers[character]
-                if existing and existing.Connected then
-                    return
-                end
-
-                -- Catch Character.Devon on the exact ChildAdded event and rename it immediately.
-                local watcher = utility:Connection(character.ChildAdded, function(child)
-                    if not (shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value) then
-                        return
-                    end
-
-                    if child:IsA("Model") then
-                        local current_target = get_active_spoof_model_name()
-                        if current_target then
-                            apply_character_name_model(child, current_target)
-                        end
-                    end
-                end)
-
-                streamer_character_model_watchers[character] = watcher
-                streamer_connections[#streamer_connections + 1] = watcher
-            end
-
             function cheat_client:spoof_name(name)
-                -- Frame-1 name spoof: write CharacterName as soon as the TextObject exists.
-                -- Do NOT wait for its Shadow child; that was the remaining respawn flash.
-                local upper_name = string.upper(name)
-
-                local function apply_and_lock_name_text(text_object)
-                    if not text_object then return end
-
-                    -- Immediate write on the same event turn the UI object appears.
-                    pcall(function()
-                        if text_object.Text ~= upper_name then
-                            text_object.Text = upper_name
-                        end
-                    end)
-
-                    -- The game may assign the real name immediately after parenting the label.
-                    -- Re-assert synchronously whenever Text is changed so it never survives to render.
-                    if utility
-                        and shared
-                        and Toggles
-                        and Toggles.streamer_mode
-                        and Toggles.streamer_mode.Value
-                        and not text_object:GetAttribute("HXD_NameSpoofLock")
-                    then
-                        text_object:SetAttribute("HXD_NameSpoofLock", true)
-
-                        local name_lock = utility:Connection(text_object:GetPropertyChangedSignal("Text"), function()
-                            if not (shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value) then
-                                return
-                            end
-
-                            local current_name = cheat_client.config.custom_name_spoof
-                            if not current_name or current_name == "" then
-                                current_name = cheat_client._streamer_spoof_name
-                            end
-                            if not current_name or current_name == "" then return end
-
-                            local target = string.upper(current_name)
-                            if text_object.Text ~= target then
-                                text_object.Text = target
-                            end
-                        end)
-
-                        streamer_connections[#streamer_connections + 1] = name_lock
+                task.wait(0.186)
+                local statGui
+            
+                if plr.Character and FindFirstChild(plr.PlayerGui, "StatGui") then
+                    statGui = FindFirstChild(plr.PlayerGui, "StatGui")
+                    local charShadow = statGui:WaitForChild("Container", 2)
+                        and statGui.Container:WaitForChild("CharacterName", 2)
+                        and statGui.Container.CharacterName:WaitForChild("Shadow", 2)
+            
+                    if charShadow then
+                        charShadow.Text = string.upper(name)
+                        charShadow.Parent.Text = string.upper(name)
                     end
-                end
-
-                local statGui = FindFirstChild(plr.PlayerGui, "StatGui")
-                local container = statGui and FindFirstChild(statGui, "Container")
-                local characterName = container and FindFirstChild(container, "CharacterName")
-
-                -- Important: CharacterName is handled independently from Shadow.
-                -- Previously the main label was not changed until Shadow existed.
-                if characterName then
-                    apply_and_lock_name_text(characterName)
-                    apply_and_lock_name_text(FindFirstChild(characterName, "Shadow"))
                 end
             
                 local splitString = {}
@@ -6619,16 +6162,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local firstName = splitString[1] or ""
                 local lastName = splitString[2] or ""
-
-                -- Rogue also inserts a direct child Model under the local character whose
-                -- Name starts as the real first name (for example Character.Devon). While
-                -- streamer mode is active, rename that Model to the full spoofed name
-                -- (First Last). When restoring, put it back to the original first name.
-                local character_model_name = firstName
-                if shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value then
-                    character_model_name = get_active_spoof_model_name() or firstName
-                end
-                setup_character_name_model_spoof(plr.Character, character_model_name)
 
                 if game.PlaceId == 5208655184 or game.PlaceId == 109732117428502 then
                     plr:SetAttribute("FirstName", firstName)
@@ -6711,14 +6244,10 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
 
                         if cheat_client.config.custom_name_spoof and cheat_client.config.custom_name_spoof ~= "" then
-                            cheat_client._streamer_spoof_name = cheat_client.config.custom_name_spoof
-                            cheat_client:spoof_name(cheat_client._streamer_spoof_name)
+                            cheat_client:spoof_name(cheat_client.config.custom_name_spoof)
                         elseif cheat_client.last_names and #cheat_client.last_names > 0 then
-                            if not cheat_client._streamer_spoof_name or cheat_client._streamer_spoof_name == "" then
-                                local random_lastname = cheat_client.last_names[math.random(1, #cheat_client.last_names)]
-                                cheat_client._streamer_spoof_name = "Fear " .. random_lastname
-                            end
-                            cheat_client:spoof_name(cheat_client._streamer_spoof_name)
+                            local random_lastname = cheat_client.last_names[math.random(1, #cheat_client.last_names)]
+                            cheat_client:spoof_name("Fear " .. random_lastname)
                         end
 
                         utility:Connection(gui.MenuOpened, function()
@@ -6843,9 +6372,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 return
             end
 
-            local container = FindFirstChild(stat_gui, "Container")
-            local health = container and FindFirstChild(container, "Health")
-            local lives = health and FindFirstChild(health, "Lives")
+            local lives = FindFirstChild(stat_gui.Container.Health, "Lives")
             if not lives then
                 cheat_client._spoofing_days = false
                 return
@@ -8603,9 +8130,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     if playerLabels then
                         for label, player in pairs(playerLabels) do
                             if label and label:IsA("TextLabel") and player then
-                                if Toggles and Toggles.disable_colored_names and Toggles.disable_colored_names.Value then
-                                    label.TextColor3 = getNaturalPlayerColor and getNaturalPlayerColor(player) or Color3.new(1, 1, 1)
-                                elseif state then
+                                if state then
                                     local color = getPlayerColor(player)
                                     label.TextColor3 = color
                                 else
@@ -11189,7 +10714,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             local char_custom_connection = nil
             local current_accessories = {}
-            local accessory_asset_cache = {}
             local char_monitor_connections = {}
             local char_custom_enabled = {
                 face = false,
@@ -11198,14 +10722,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 accessories = false,
                 skin_color = false,
                 rlface_color = false,
-                hair_color = false,
-                edict = false,
-                metal_arm = false,
                 clothing_dye = false
             }
-            -- SpecialMesh.VertexColor is a Vector3, so keep each original value
-            -- per live hair/accessory mesh for exact restoration.
-            local original_hair_vertex_colors = setmetatable({}, {__mode = "k"})
             local original_char_state = {
                 face = nil,
                 shirt = nil,
@@ -11214,413 +10732,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 rlface_color = nil,
                 cached = false
             }
-
-            -- Rogue normally uses R6 body-part colors for the visible skin. BodyColors can
-            -- exist without immediately recoloring already-created parts, so skin spoofing
-            -- writes/locks BOTH BodyColors and the actual rendered body BaseParts.
-            local SKIN_BODY_PART_NAMES = {
-                ["Head"] = true,
-                ["Torso"] = true,
-                ["Left Arm"] = true,
-                ["Right Arm"] = true,
-                ["Left Leg"] = true,
-                ["Right Leg"] = true,
-
-                -- R15 fallback, harmless in Rogue's normal R6 characters.
-                ["UpperTorso"] = true,
-                ["LowerTorso"] = true,
-                ["LeftUpperArm"] = true,
-                ["LeftLowerArm"] = true,
-                ["LeftHand"] = true,
-                ["RightUpperArm"] = true,
-                ["RightLowerArm"] = true,
-                ["RightHand"] = true,
-                ["LeftUpperLeg"] = true,
-                ["LeftLowerLeg"] = true,
-                ["LeftFoot"] = true,
-                ["RightUpperLeg"] = true,
-                ["RightLowerLeg"] = true,
-                ["RightFoot"] = true,
-            }
-
-            local function is_skin_body_part(instance)
-                return instance
-                    and instance:IsA("BasePart")
-                    and SKIN_BODY_PART_NAMES[instance.Name] == true
-            end
-
-            local function get_skin_body_parts(character)
-                local parts = {}
-                if not character then return parts end
-
-                for _, child in ipairs(character:GetChildren()) do
-                    if is_skin_body_part(child) then
-                        parts[#parts + 1] = child
-                    end
-                end
-
-                return parts
-            end
-
-            local function get_visible_skin_color(character)
-                if not character then return nil end
-
-                -- Prefer the color that is actually being rendered, not BodyColors.
-                local head = FindFirstChild(character, "Head")
-                if head and head:IsA("BasePart") then
-                    return head.Color
-                end
-
-                local torso = FindFirstChild(character, "Torso") or FindFirstChild(character, "UpperTorso")
-                if torso and torso:IsA("BasePart") then
-                    return torso.Color
-                end
-
-                for _, part in ipairs(get_skin_body_parts(character)) do
-                    return part.Color
-                end
-
-                -- Only use BodyColors as a fallback if the physical body is not available yet.
-                local body_colors = FindFirstChildOfClass(character, "BodyColors")
-                return body_colors and body_colors.HeadColor3 or nil
-            end
-
-            local function set_visible_skin_parts(character, color)
-                if not character or not color then return end
-                for _, part in ipairs(get_skin_body_parts(character)) do
-                    pcall(function()
-                        part.Color = color
-                    end)
-                end
-            end
-
-            -- Metal Arm spoof. The reference character uses two MeshParts directly under
-            -- the Character: Arm (welded to Left Arm) and ArmPlate (welded to Torso).
-            -- IMPORTANT: generic parts named Arm/ArmPlate exist on other characters too, so
-            -- only accept donors whose MeshId exactly matches the real Metal Arm meshes.
-            -- We also cache verified templates while alive; respawns clone those exact templates
-            -- instead of accidentally grabbing an unrelated Arm from another player.
-            local METAL_ARM_TAG = "HXD_MetalArmSpoof"
-            local METAL_ARM_COLOR = Color3.fromRGB(248, 248, 248)
-            local METAL_ARM_MESH_ID = "3043728140"
-            local METAL_ARM_PLATE_MESH_ID = "3043733352"
-            local METAL_ARM_SIZE = Vector3.new(1.185, 2.019, 1.163)
-            local METAL_ARM_PLATE_SIZE = Vector3.new(0.739, 1.018, 1.091)
-            local METAL_ARM_C0 = CFrame.new(
-                0, 0, 0,
-                -1, 0, 0,
-                 0, 1, 0,
-                 0, 0, -1
-            )
-            local METAL_ARM_PLATE_C0 = CFrame.new(
-                -0.65, 0.5, 0,
-                -1, 0, 0,
-                 0, 1, 0,
-                 0, 0, -1
-            )
-            local METAL_ARM_C1 = CFrame.new()
-
-            -- Once a verified piece is found/created, keep an unparented clone. This is what
-            -- makes respawn frame-one reliable: no donor scan can select the wrong generic Arm.
-            local metal_arm_template_arm = nil
-            local metal_arm_template_plate = nil
-
-            local function get_left_arm(character)
-                if not character then return nil end
-                return FindFirstChild(character, "Left Arm")
-                    or FindFirstChild(character, "Brazo izquierdo")
-                    or FindFirstChild(character, "LeftUpperArm")
-            end
-
-            local function get_metal_arm_torso(character)
-                if not character then return nil end
-                return FindFirstChild(character, "Torso") or FindFirstChild(character, "UpperTorso")
-            end
-
-            local function metal_arm_mesh_id(part)
-                if not part or not part:IsA("MeshPart") then return nil end
-
-                local raw = tostring(part.MeshId or "")
-                return raw:match("rbxassetid://(%d+)")
-                    or raw:match("[?&]id=(%d+)")
-                    or raw:match("/(%d+)$")
-                    or raw:match("^(%d+)$")
-            end
-
-            local function is_expected_metal_piece(part, expected_id)
-                return part
-                    and part:IsA("MeshPart")
-                    and metal_arm_mesh_id(part) == tostring(expected_id)
-            end
-
-            local function find_expected_metal_piece(character, piece_name, expected_id)
-                if not character then return nil end
-
-                -- Prefer our own tagged spoof if one is already present.
-                for _, child in ipairs(character:GetChildren()) do
-                    if child.Name == piece_name
-                        and child:IsA("MeshPart")
-                        and child:GetAttribute(METAL_ARM_TAG)
-                        and is_expected_metal_piece(child, expected_id)
-                    then
-                        return child
-                    end
-                end
-
-                -- A character may naturally have the real Metal Arm. Reuse it only if the
-                -- MeshId proves that it is the actual piece, never just because its name is Arm.
-                for _, child in ipairs(character:GetChildren()) do
-                    if child.Name == piece_name and is_expected_metal_piece(child, expected_id) then
-                        return child
-                    end
-                end
-
-                return nil
-            end
-
-            local function get_metal_arm_donor_parts(character)
-                if not live_folder then return nil, nil end
-
-                for _, candidate in ipairs(live_folder:GetChildren()) do
-                    if candidate:IsA("Model") and candidate ~= character then
-                        local arm = find_expected_metal_piece(candidate, "Arm", METAL_ARM_MESH_ID)
-                        local plate = find_expected_metal_piece(candidate, "ArmPlate", METAL_ARM_PLATE_MESH_ID)
-
-                        -- BOTH pieces must have the exact known Metal Arm MeshIds. This prevents
-                        -- respawn from cloning random armor/weapon parts that happen to share names.
-                        if arm and plate then
-                            return arm, plate
-                        end
-                    end
-                end
-
-                return nil, nil
-            end
-
-            local function strip_metal_arm_welds(part)
-                if not part then return end
-                for _, child in ipairs(part:GetChildren()) do
-                    if child:IsA("Weld") or child:IsA("WeldConstraint") or child:IsA("Motor6D") then
-                        child:Destroy()
-                    end
-                end
-            end
-
-            local function load_metal_meshpart(mesh_id)
-                local loaded_part = nil
-
-                pcall(function()
-                    local objects = game:GetObjects("rbxassetid://" .. tostring(mesh_id))
-                    local root = objects and objects[1]
-                    if root then
-                        if root:IsA("MeshPart") then
-                            loaded_part = root
-                        else
-                            for _, obj in ipairs(root:GetDescendants()) do
-                                if obj:IsA("MeshPart") and metal_arm_mesh_id(obj) == tostring(mesh_id) then
-                                    loaded_part = obj:Clone()
-                                    break
-                                end
-                            end
-                            root:Destroy()
-                        end
-                    end
-                end)
-
-                if loaded_part and is_expected_metal_piece(loaded_part, mesh_id) then
-                    return loaded_part
-                elseif loaded_part then
-                    loaded_part:Destroy()
-                    loaded_part = nil
-                end
-
-                -- Fallback for clients that allow local MeshPart.MeshId assignment.
-                local part = Instance.new("MeshPart")
-                local ok = pcall(function()
-                    part.MeshId = "rbxassetid://" .. tostring(mesh_id)
-                end)
-                if not ok or not is_expected_metal_piece(part, mesh_id) then
-                    part:Destroy()
-                    return nil
-                end
-                return part
-            end
-
-            local function configure_metal_arm_piece(part, name, size, mesh_id)
-                if not part or not part:IsA("MeshPart") then return nil end
-
-                -- Never convert an unrelated donor into the Metal Arm by name alone.
-                if not is_expected_metal_piece(part, mesh_id) then
-                    part:Destroy()
-                    return nil
-                end
-
-                strip_metal_arm_welds(part)
-                part.Name = name
-                part.Size = size
-                part.Color = METAL_ARM_COLOR
-                part.Material = Enum.Material.Metal
-                part.Transparency = 1 -- stay hidden until its weld/CFrame are fully ready
-                part.Reflectance = 0
-                part.Anchored = false
-                part.CanCollide = false
-                part.CanQuery = true
-                part.CanTouch = true
-                part.Massless = true
-                part.CastShadow = true
-
-                pcall(function() part.DoubleSided = false end)
-                pcall(function() part.CollisionFidelity = Enum.CollisionFidelity.Box end)
-                pcall(function() part.RenderFidelity = Enum.RenderFidelity.Precise end)
-                pcall(function() part.TextureID = "" end)
-                pcall(function() part.AssemblyLinearVelocity = Vector3.zero end)
-                pcall(function() part.AssemblyAngularVelocity = Vector3.zero end)
-                part:SetAttribute(METAL_ARM_TAG, true)
-
-                return part
-            end
-
-            local function cache_metal_arm_template(part, which)
-                if not part then return end
-
-                local clone = part:Clone()
-                strip_metal_arm_welds(clone)
-                clone.Parent = nil
-                clone.Transparency = 0
-
-                if which == "Arm" then
-                    if metal_arm_template_arm then metal_arm_template_arm:Destroy() end
-                    metal_arm_template_arm = clone
-                else
-                    if metal_arm_template_plate then metal_arm_template_plate:Destroy() end
-                    metal_arm_template_plate = clone
-                end
-            end
-
-            local function make_metal_arm_weld(part, part0, c0)
-                if not part or not part0 then return nil end
-
-                strip_metal_arm_welds(part)
-
-                local weld = Instance.new("Weld")
-                weld.Name = "Weld"
-                weld.Part0 = part0
-                weld.Part1 = part
-                weld.C0 = c0
-                weld.C1 = METAL_ARM_C1
-                weld.Parent = part
-                return weld
-            end
-
-            local function remove_metal_arm_spoof(character)
-                if not character then return end
-
-                -- Remove only pieces created by this spoof. Never delete a natural Metal Arm.
-                for _, child in ipairs(character:GetChildren()) do
-                    if (child.Name == "Arm" or child.Name == "ArmPlate")
-                        and child:GetAttribute(METAL_ARM_TAG)
-                    then
-                        child:Destroy()
-                    end
-                end
-            end
-
-            local function build_metal_arm_piece(character, piece_name, expected_id, size, anchor, c0, donor, cached_template)
-                local existing = find_expected_metal_piece(character, piece_name, expected_id)
-                if existing then
-                    -- Natural/previous exact piece: simply correct the weld for THIS character.
-                    existing.CFrame = anchor.CFrame * c0
-                    make_metal_arm_weld(existing, anchor, c0)
-                    existing.CFrame = anchor.CFrame * c0
-                    pcall(function() existing.AssemblyLinearVelocity = Vector3.zero end)
-                    pcall(function() existing.AssemblyAngularVelocity = Vector3.zero end)
-                    return existing, false
-                end
-
-                -- Stable cached template wins on respawn. A live donor is only considered if its
-                -- MeshId already passed the strict validation above.
-                local part = nil
-                if cached_template and cached_template.Parent == nil then
-                    part = cached_template:Clone()
-                elseif donor and is_expected_metal_piece(donor, expected_id) then
-                    part = donor:Clone()
-                else
-                    part = load_metal_meshpart(expected_id)
-                end
-
-                part = configure_metal_arm_piece(part, piece_name, size, expected_id)
-                if not part then return nil, false end
-
-                -- Fully position/weld while invisible BEFORE parenting, preventing the huge/outside
-                -- one-frame flash that occurred when a bad/stale donor part was parented first.
-                part.CFrame = anchor.CFrame * c0
-                make_metal_arm_weld(part, anchor, c0)
-                part.CFrame = anchor.CFrame * c0
-                part.Parent = character
-                pcall(function() part.AssemblyLinearVelocity = Vector3.zero end)
-                pcall(function() part.AssemblyAngularVelocity = Vector3.zero end)
-                part.Transparency = 0
-
-                return part, true
-            end
-
-            local function apply_metal_arm(character)
-                if not character or not character.Parent then return false end
-
-                local left_arm = get_left_arm(character)
-                local torso = get_metal_arm_torso(character)
-                if not left_arm or not torso then
-                    return false
-                end
-
-                -- Only exact-MeshId donors are ever returned here. Generic Arm/ArmPlate parts
-                -- from other players are ignored, which fixes the oversized floating respawn mesh.
-                local donor_arm, donor_plate = get_metal_arm_donor_parts(character)
-
-                local arm, arm_created = build_metal_arm_piece(
-                    character,
-                    "Arm",
-                    METAL_ARM_MESH_ID,
-                    METAL_ARM_SIZE,
-                    left_arm,
-                    METAL_ARM_C0,
-                    donor_arm,
-                    metal_arm_template_arm
-                )
-                if not arm then
-                    warn("[Metal Arm] Failed to create verified Arm MeshPart")
-                    return false
-                end
-
-                local plate, plate_created = build_metal_arm_piece(
-                    character,
-                    "ArmPlate",
-                    METAL_ARM_PLATE_MESH_ID,
-                    METAL_ARM_PLATE_SIZE,
-                    torso,
-                    METAL_ARM_PLATE_C0,
-                    donor_plate,
-                    metal_arm_template_plate
-                )
-                if not plate then
-                    if arm_created and arm and arm.Parent and arm:GetAttribute(METAL_ARM_TAG) then
-                        arm:Destroy()
-                    end
-                    warn("[Metal Arm] Failed to create verified ArmPlate MeshPart")
-                    return false
-                end
-
-                -- Cache exact, configured templates while the character is healthy. Subsequent
-                -- CharacterAdded calls can clone these immediately with the correct mesh/size.
-                if not metal_arm_template_arm then
-                    cache_metal_arm_template(arm, "Arm")
-                end
-                if not metal_arm_template_plate then
-                    cache_metal_arm_template(plate, "ArmPlate")
-                end
-
-                return true
-            end
 
             local function clear_character_item(character, class_name)
                 if not character or not character.Parent then return end
@@ -11721,236 +10832,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end)
 
                 if not success then print("Error applying outfit: " .. tostring(err)) end
-            end
-
-            local function get_hair_recolor_meshes(character)
-                local meshes = {}
-                if not character or not character.Parent then return meshes end
-
-                -- Do NOT rely on the mesh instance being named "SpecialMesh".
-                -- Rogue/localized Studio can name it something else (for example "Malla").
-                -- We only care that the child under Asset:<id>.Handle has ClassName SpecialMesh.
-                for _, asset in ipairs(character:GetChildren()) do
-                    if asset.Name:match("^Asset:%d+$") then
-                        local handle = FindFirstChild(asset, "Handle")
-                        local special_mesh = handle and FindFirstChildWhichIsA(handle, "SpecialMesh")
-                        if special_mesh then
-                            meshes[#meshes + 1] = special_mesh
-                        end
-                    end
-                end
-
-                return meshes
-            end
-
-            -- Some Rogue cosmetics store VertexColor as 0-255 Vector3 values (for example
-            -- 203,232,232), while normal SpecialMesh tinting commonly uses 0-1 values.
-            -- Preserve whichever scale that specific mesh is already using.
-            local function vertex_color_uses_255_scale(vertex_color)
-                return vertex_color and (vertex_color.X > 1.001 or vertex_color.Y > 1.001 or vertex_color.Z > 1.001)
-            end
-
-            local function color3_to_vertex_color(color, reference_vertex_color)
-                if vertex_color_uses_255_scale(reference_vertex_color) then
-                    return Vector3.new(color.R * 255, color.G * 255, color.B * 255)
-                end
-                return Vector3.new(color.R, color.G, color.B)
-            end
-
-            local function vertex_color_to_color3(vertex_color)
-                if not vertex_color then return nil end
-                if vertex_color_uses_255_scale(vertex_color) then
-                    return Color3.new(
-                        math.clamp(vertex_color.X / 255, 0, 1),
-                        math.clamp(vertex_color.Y / 255, 0, 1),
-                        math.clamp(vertex_color.Z / 255, 0, 1)
-                    )
-                end
-                return Color3.new(
-                    math.clamp(vertex_color.X, 0, 1),
-                    math.clamp(vertex_color.Y, 0, 1),
-                    math.clamp(vertex_color.Z, 0, 1)
-                )
-            end
-
-            local function wanted_hair_vertex_color(special_mesh, color)
-                local reference = original_hair_vertex_colors[special_mesh] or special_mesh.VertexColor
-                return color3_to_vertex_color(color, reference)
-            end
-
-            local function apply_hair_recolor(character, color)
-                if not character or not character.Parent or not color then return end
-
-                for _, special_mesh in ipairs(get_hair_recolor_meshes(character)) do
-                    pcall(function()
-                        if original_hair_vertex_colors[special_mesh] == nil then
-                            original_hair_vertex_colors[special_mesh] = special_mesh.VertexColor
-                        end
-                        special_mesh.VertexColor = wanted_hair_vertex_color(special_mesh, color)
-                    end)
-                end
-            end
-
-            local function restore_hair_recolor(character)
-                if not character or not character.Parent then return end
-
-                for _, special_mesh in ipairs(get_hair_recolor_meshes(character)) do
-                    local original = original_hair_vertex_colors[special_mesh]
-                    if original ~= nil then
-                        pcall(function()
-                            special_mesh.VertexColor = original
-                        end)
-                        original_hair_vertex_colors[special_mesh] = nil
-                    end
-                end
-            end
-
-            -- Edict facial-marking spoof. Rogue stores the visible mark as a Decal named
-            -- FacialMarking under Head. The Studio language can localize Head as "Cabeza",
-            -- so support both names while still preferring the normal instance name.
-            local EDICT_TEXTURES = {
-                Blademaster = "rbxassetid://4072968656",
-                Healer = "rbxassetid://4072968006",
-                Seer = "rbxassetid://4072914434",
-            }
-            local EDICT_SPOOF_TAG = "HXD_EdictSpoof"
-            local original_edict_states = setmetatable({}, {__mode = "k"})
-
-            local function get_edict_head(character)
-                if not character then return nil end
-                return FindFirstChild(character, "Head") or FindFirstChild(character, "Cabeza")
-            end
-
-            local function get_facial_marking_decals(head)
-                local decals = {}
-                if not head then return decals end
-                for _, child in ipairs(head:GetChildren()) do
-                    if child:IsA("Decal") and child.Name == "FacialMarking" then
-                        decals[#decals + 1] = child
-                    end
-                end
-                return decals
-            end
-
-            local function snapshot_edict_state(character, decal)
-                local state = original_edict_states[character]
-
-                -- If we initially had to create our own decal, but Rogue later inserts the
-                -- real FacialMarking, upgrade the snapshot to that real decal's properties.
-                if decal and not decal:GetAttribute(EDICT_SPOOF_TAG) then
-                    if not state or not state.existed then
-                        state = {
-                            existed = true,
-                            texture = decal.Texture,
-                            color = decal.Color3,
-                            transparency = decal.Transparency,
-                            face = decal.Face,
-                            zindex = decal.ZIndex,
-                        }
-                        original_edict_states[character] = state
-                    end
-                    return state
-                end
-
-                if not state then
-                    state = {existed = false}
-                    original_edict_states[character] = state
-                end
-                return state
-            end
-
-            local function apply_edict_properties(decal, edict_name)
-                if not decal or not decal.Parent then return end
-                local texture = EDICT_TEXTURES[edict_name]
-                if not texture then return end
-
-                pcall(function() decal.Texture = texture end)
-                pcall(function() decal.Color3 = Color3.fromRGB(255, 255, 255) end)
-                pcall(function() decal.Transparency = 0 end)
-                pcall(function() decal.Face = Enum.NormalId.Front end)
-                pcall(function() decal.ZIndex = 1 end)
-            end
-
-            local function apply_edict_spoof(character, edict_name)
-                if not character or not character.Parent then return nil end
-                if not EDICT_TEXTURES[edict_name] then return nil end
-
-                local head = get_edict_head(character)
-                if not head then return nil end
-
-                local natural = nil
-                local spoofed = nil
-                for _, decal in ipairs(get_facial_marking_decals(head)) do
-                    if decal:GetAttribute(EDICT_SPOOF_TAG) then
-                        spoofed = spoofed or decal
-                    else
-                        natural = natural or decal
-                    end
-                end
-
-                local target = natural
-                if target then
-                    snapshot_edict_state(character, target)
-                    -- If frame-one spoofing created a temporary decal before Rogue's own mark
-                    -- arrived, move over to the real decal and remove only our temporary one.
-                    for _, decal in ipairs(get_facial_marking_decals(head)) do
-                        if decal ~= target and decal:GetAttribute(EDICT_SPOOF_TAG) then
-                            decal:Destroy()
-                        end
-                    end
-                else
-                    target = spoofed
-                    if not target then
-                        snapshot_edict_state(character, nil)
-                        target = Instance.new("Decal")
-                        target.Name = "FacialMarking"
-                        target:SetAttribute(EDICT_SPOOF_TAG, true)
-                        target.Parent = head
-                    end
-                end
-
-                apply_edict_properties(target, edict_name)
-                return target
-            end
-
-            local function restore_edict_spoof(character)
-                if not character or not character.Parent then return end
-
-                local head = get_edict_head(character)
-                if not head then return end
-
-                local state = original_edict_states[character]
-
-                -- Remove only decals that this spoof created. Never delete Rogue's real mark.
-                for _, decal in ipairs(get_facial_marking_decals(head)) do
-                    if decal:GetAttribute(EDICT_SPOOF_TAG) then
-                        decal:Destroy()
-                    end
-                end
-
-                if state and state.existed then
-                    local decal = nil
-                    for _, candidate in ipairs(get_facial_marking_decals(head)) do
-                        if not candidate:GetAttribute(EDICT_SPOOF_TAG) then
-                            decal = candidate
-                            break
-                        end
-                    end
-
-                    if not decal then
-                        decal = Instance.new("Decal")
-                        decal.Name = "FacialMarking"
-                        decal.Parent = head
-                    end
-
-                    pcall(function() decal.Texture = state.texture end)
-                    pcall(function() decal.Color3 = state.color end)
-                    pcall(function() decal.Transparency = state.transparency end)
-                    pcall(function() decal.Face = state.face end)
-                    pcall(function() decal.ZIndex = state.zindex end)
-                end
-
-                original_edict_states[character] = nil
             end
 
             local function cache_original_state(character)
@@ -12078,13 +10959,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         body_colors.RightArmColor3 = original_char_state.skin_color
                         body_colors.LeftLegColor3 = original_char_state.skin_color
                         body_colors.RightLegColor3 = original_char_state.skin_color
-                        set_visible_skin_parts(character, original_char_state.skin_color)
                     end
 
-
-                    restore_hair_recolor(character)
-                    restore_edict_spoof(character)
-                    remove_metal_arm_spoof(character)
 
                     for _, acc in ipairs(current_accessories) do
                         if acc and acc.Parent then
@@ -12190,53 +11066,40 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 return nil
             end
 
-            local function resolve_clothing_template(clothing_id)
-                if clothing_id == nil then return nil end
-                local raw = tostring(clothing_id)
-                if raw == "" then return nil end
-
-                -- Outfit presets already store ShirtTemplate/PantsTemplate URLs. Using them
-                -- directly avoids an HTTP lookup on every respawn.
-                local direct_id = raw:match("^rbxassetid://(%d+)$")
-                if direct_id then
-                    return "rbxassetid://" .. direct_id
-                end
-
-                local extracted_id = raw:match("asset/%?id=(%d+)")
-                    or raw:match("[?&]id=(%d+)")
-                    or raw:match("^(%d+)$")
-                    or raw
-
-                if #extracted_id > 50 then
-                    return nil
-                end
-
-                local template_id = get_template_id(extracted_id)
-                return "rbxassetid://" .. tostring(template_id or extracted_id)
-            end
-
             local function apply_shirt(character, shirt_id)
                 if not character or not character.Parent then return end
                 if shirt_id == "" then return end
 
                 local success, err = pcall(function()
-                    local target_template = resolve_clothing_template(shirt_id)
-                    if not target_template then return end
+                    local extracted_id = shirt_id:match("rbxassetid://(%d+)") or shirt_id:match("^(%d+)$") or shirt_id
 
-                    local shirt = FindFirstChildOfClass(character, "Shirt")
-                    if not shirt then
-                        shirt = Instance.new("Shirt")
-                        shirt.Parent = character
+                    if #extracted_id > 50 then
+                        warn("Shirt ID too long (max 50 digits): " .. extracted_id)
+                        return
+                    end
+                    
+                    local template_id = get_template_id(extracted_id)
+                    local target_template = template_id and ("rbxassetid://" .. template_id) or ("rbxassetid://" .. extracted_id)
+
+                    local old_shirt = FindFirstChildOfClass(character, "Shirt")
+                    if old_shirt then
+                        old_shirt:Destroy()
                     end
 
-                    -- No verification wait: set + lock immediately.
+                    local shirt = Instance.new("Shirt")
+                    shirt.Parent = character
                     shirt.ShirtTemplate = target_template
-                    if utility then
+
+                    task.wait(0.5)
+                    if shirt.ShirtTemplate == target_template and utility then
                         utility:Connection(shirt:GetPropertyChangedSignal("ShirtTemplate"), function()
-                            if character.Parent and shirt.Parent == character and shirt.ShirtTemplate ~= target_template then
+                            if shirt.ShirtTemplate ~= target_template then
                                 shirt.ShirtTemplate = target_template
                             end
                         end)
+                    else
+                        warn("Shirt ID failed to load (might be invalid): " .. extracted_id)
+                        library:Notify("Shirt ID " .. extracted_id .. " failed to load", 3)
                     end
                 end)
 
@@ -12250,23 +11113,35 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if pants_id == "" then return end
 
                 local success, err = pcall(function()
-                    local target_template = resolve_clothing_template(pants_id)
-                    if not target_template then return end
+                    local extracted_id = pants_id:match("rbxassetid://(%d+)") or pants_id:match("^(%d+)$") or pants_id
 
-                    local pants = FindFirstChildOfClass(character, "Pants")
-                    if not pants then
-                        pants = Instance.new("Pants")
-                        pants.Parent = character
+                    if #extracted_id > 50 then
+                        warn("Pants ID too long (max 50 digits): " .. extracted_id)
+                        return
                     end
 
-                    -- No verification wait: set + lock immediately.
+                    local template_id = get_template_id(extracted_id)
+                    local target_template = template_id and ("rbxassetid://" .. template_id) or ("rbxassetid://" .. extracted_id)
+
+                    local old_pants = FindFirstChildOfClass(character, "Pants")
+                    if old_pants then
+                        old_pants:Destroy()
+                    end
+
+                    local pants = Instance.new("Pants")
+                    pants.Parent = character
                     pants.PantsTemplate = target_template
-                    if utility then
+
+                    task.wait(0.5)
+                    if pants.PantsTemplate == target_template and utility then
                         utility:Connection(pants:GetPropertyChangedSignal("PantsTemplate"), function()
-                            if character.Parent and pants.Parent == character and pants.PantsTemplate ~= target_template then
+                            if pants.PantsTemplate ~= target_template then
                                 pants.PantsTemplate = target_template
                             end
                         end)
+                    else
+                        warn("Pants ID failed to load (might be invalid): " .. extracted_id)
+                        library:Notify("Pants ID " .. extracted_id .. " failed to load", 3)
                     end
                 end)
 
@@ -12276,31 +11151,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             local function apply_skin_color(character, color)
-                if not character or not character.Parent or not color then return end
+                if not character or not character.Parent then return end
 
                 local success, err = pcall(function()
-                    -- Cache the real visible color before the first recolor, if frame-one
-                    -- caching happened before Head/body parts were inserted.
-                    if not original_char_state.skin_color then
-                        original_char_state.skin_color = get_visible_skin_color(character)
-                    end
-
                     local body_colors = FindFirstChildOfClass(character, "BodyColors")
                     if not body_colors then
                         body_colors = Instance.new("BodyColors")
                         body_colors.Parent = character
                     end
-
                     body_colors.HeadColor3 = color
                     body_colors.TorsoColor3 = color
                     body_colors.LeftArmColor3 = color
                     body_colors.RightArmColor3 = color
                     body_colors.LeftLegColor3 = color
                     body_colors.RightLegColor3 = color
-
-                    -- BodyColors alone is not enough in Rogue once the body has already been
-                    -- created. Set the actual rendered parts immediately as well.
-                    set_visible_skin_parts(character, color)
                 end)
 
                 if not success then
@@ -12347,16 +11211,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     local extracted_id = id:match("rbxassetid://(%d+)") or id:match("^(%d+)$") or id
 
                     local success, err = pcall(function()
-                        local acc
-                        local cached = accessory_asset_cache[extracted_id]
-                        if cached then
-                            acc = cached:Clone()
-                        else
-                            acc = game:GetObjects("rbxassetid://" .. extracted_id)[1]
-                            if acc then
-                                accessory_asset_cache[extracted_id] = acc:Clone()
-                            end
-                        end
+                        local acc = game:GetObjects("rbxassetid://" .. extracted_id)[1]
                         if not acc then return end
 
                         if acc then
@@ -12411,9 +11266,13 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             local function apply_all_customizations(character)
+                repeat task.wait() until FindFirstChild(character, "Humanoid")
+                repeat task.wait() until FindFirstChild(character, "Head")
+                repeat task.wait() until character:FindFirstChild("Head"):FindFirstChild("RLFace")
+
+                task.wait(0.5)
                 if not character or not character.Parent then return end
 
-                -- Cache whatever already exists, but never wait for the full character to finish loading.
                 cache_original_state(character)
 
                 for _, conn in ipairs(char_monitor_connections) do
@@ -12424,373 +11283,111 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 char_monitor_connections = {}
 
                 local config = cheat_client.config
-                local reapply_debounce = false
-                local monitored = setmetatable({}, {__mode = "k"})
-                local skin_monitored = setmetatable({}, {__mode = "k"})
-                local edict_monitored = setmetatable({}, {__mode = "k"})
 
-                local function with_reapply_lock(fn)
-                    if reapply_debounce then return end
-                    reapply_debounce = true
-                    pcall(fn)
-                    reapply_debounce = false
+                if char_custom_enabled.face and config.char_custom_face ~= "" then
+                    apply_face(character, config.char_custom_face)
                 end
 
-                local function lock_color_property(instance, property, wanted)
-                    if not utility or monitored[instance] == "color_" .. property then return end
-                    monitored[instance] = "color_" .. property
-                    local conn = utility:Connection(instance:GetPropertyChangedSignal(property), function()
-                        if instance.Parent and instance[property] ~= wanted then
-                            instance[property] = wanted
+                if char_custom_enabled.shirt and config.char_custom_shirt ~= "" then
+                    apply_shirt(character, config.char_custom_shirt)
+                    if config.outfit_shirt_color then
+                        task.wait(0.1)
+                        local shirt = FindFirstChildOfClass(character, "Shirt")
+                        if shirt then
+                            shirt.Color3 = config.outfit_shirt_color
+                        end
+                    end
+                end
+
+                if char_custom_enabled.pants and config.char_custom_pants ~= "" then
+                    apply_pants(character, config.char_custom_pants)
+                    if config.outfit_pants_color then
+                        task.wait(0.1)
+                        local pants = FindFirstChildOfClass(character, "Pants")
+                        if pants then
+                            pants.Color3 = config.outfit_pants_color
+                        end
+                    end
+                end
+
+                if char_custom_enabled.accessories and config.char_custom_accessories ~= "" then
+                    apply_accessories(character, config.char_custom_accessories)
+                end
+
+                if char_custom_enabled.skin_color then
+                    apply_skin_color(character, config.char_custom_skin_color)
+                end
+
+                if char_custom_enabled.rlface_color then
+                    apply_rlface_color(character, config.char_custom_rlface_color)
+                end
+
+                if char_custom_enabled.clothing_dye then
+                    apply_clothing_dye(character, config.char_custom_clothing_dye)
+                end
+
+
+                local reapply_debounce = false
+                local function setup_monitoring()
+                    local shirt_conn = utility:Connection(character.ChildAdded, function(child)
+                        if reapply_debounce then return end
+                        if child:IsA("Shirt") and config.char_custom_shirt ~= "" then
+                            task.wait(0.1)
+                            if child.ShirtTemplate ~= "rbxassetid://" .. config.char_custom_shirt then
+                                reapply_debounce = true
+                                apply_shirt(character, config.char_custom_shirt)
+                                task.wait(0.5)
+                                reapply_debounce = false
+                            end
+                        elseif child:IsA("Pants") and config.char_custom_pants ~= "" then
+                            task.wait(0.1)
+                            if child.PantsTemplate ~= "rbxassetid://" .. config.char_custom_pants then
+                                reapply_debounce = true
+                                apply_pants(character, config.char_custom_pants)
+                                task.wait(0.5)
+                                reapply_debounce = false
+                            end
                         end
                     end)
-                    table.insert(char_monitor_connections, conn)
-                end
 
-                local function lock_rlface(rlface)
-                    if not rlface or not rlface:IsA("Decal") then return end
-
-                    if char_custom_enabled.face and config.char_custom_face ~= "" then
-                        local extracted_id = config.char_custom_face:match("asset/%?id=(%d+)")
-                            or config.char_custom_face:match("rbxassetid://(%d+)")
-                            or config.char_custom_face:match("^(%d+)$")
-                            or config.char_custom_face
-                        local wanted_texture = "rbxassetid://" .. extracted_id
-                        if rlface.Texture ~= wanted_texture then
-                            rlface.Texture = wanted_texture
-                        end
-                        if utility and not monitored[rlface] then
-                            monitored[rlface] = true
-                            local conn = utility:Connection(rlface:GetPropertyChangedSignal("Texture"), function()
-                                if rlface.Parent and rlface.Texture ~= wanted_texture then
-                                    rlface.Texture = wanted_texture
-                                end
-                            end)
-                            table.insert(char_monitor_connections, conn)
-                        end
-                    end
-
-                    if char_custom_enabled.rlface_color then
-                        if rlface.Color3 ~= config.char_custom_rlface_color then
-                            rlface.Color3 = config.char_custom_rlface_color
-                        end
-                        lock_color_property(rlface, "Color3", config.char_custom_rlface_color)
-                    end
-                end
-
-                local function lock_edict_decal(decal)
-                    if not decal or not decal:IsA("Decal") or decal.Name ~= "FacialMarking" then return end
-                    if not char_custom_enabled.edict then return end
-
-                    if not decal:GetAttribute(EDICT_SPOOF_TAG) then
-                        snapshot_edict_state(character, decal)
-
-                        -- Prefer Rogue's real FacialMarking if it appears after our temporary
-                        -- frame-one decal. Remove only the temporary spoof decal.
-                        local head = decal.Parent
-                        if head then
-                            for _, other in ipairs(get_facial_marking_decals(head)) do
-                                if other ~= decal and other:GetAttribute(EDICT_SPOOF_TAG) then
-                                    other:Destroy()
-                                end
+                    local body_conn = utility:Connection(character.ChildAdded, function(child)
+                        if reapply_debounce then return end
+                        if child:IsA("BodyColors") and config.char_custom_skin_color then
+                            task.wait(0.1)
+                            if child.HeadColor3 ~= config.char_custom_skin_color then
+                                reapply_debounce = true
+                                apply_skin_color(character, config.char_custom_skin_color)
+                                task.wait(0.5)
+                                reapply_debounce = false
                             end
                         end
-                    end
-
-                    apply_edict_properties(decal, config.char_custom_edict)
-
-                    if utility and not edict_monitored[decal] then
-                        edict_monitored[decal] = true
-                        for _, property in ipairs({"Texture", "Color3", "Transparency", "Face", "ZIndex"}) do
-                            local conn = utility:Connection(decal:GetPropertyChangedSignal(property), function()
-                                if decal.Parent and char_custom_enabled.edict then
-                                    apply_edict_properties(decal, cheat_client.config.char_custom_edict)
-                                end
-                            end)
-                            table.insert(char_monitor_connections, conn)
-                        end
-                    end
-                end
-
-                local function lock_hair_mesh(special_mesh)
-                    if not special_mesh or not special_mesh:IsA("SpecialMesh") or not char_custom_enabled.hair_color then
-                        return
-                    end
-
-                    if original_hair_vertex_colors[special_mesh] == nil then
-                        original_hair_vertex_colors[special_mesh] = special_mesh.VertexColor
-                    end
-
-                    local wanted = wanted_hair_vertex_color(special_mesh, config.char_custom_hair_color)
-
-                    if special_mesh.VertexColor ~= wanted then
-                        special_mesh.VertexColor = wanted
-                    end
-
-                    local monitor_key = "hair_vertex_color"
-                    if utility and monitored[special_mesh] ~= monitor_key then
-                        monitored[special_mesh] = monitor_key
-                        local conn = utility:Connection(special_mesh:GetPropertyChangedSignal("VertexColor"), function()
-                            if special_mesh.Parent and char_custom_enabled.hair_color then
-                                local current = cheat_client.config.char_custom_hair_color
-                                local current_wanted = wanted_hair_vertex_color(special_mesh, current)
-                                if special_mesh.VertexColor ~= current_wanted then
-                                    special_mesh.VertexColor = current_wanted
-                                end
-                            end
-                        end)
-                        table.insert(char_monitor_connections, conn)
-                    end
-                end
-
-                local function lock_skin_part(part)
-                    if not is_skin_body_part(part) or not char_custom_enabled.skin_color then return end
-
-                    local wanted = config.char_custom_skin_color
-                    if part.Color ~= wanted then
-                        part.Color = wanted
-                    end
-
-                    if utility and not skin_monitored[part] then
-                        skin_monitored[part] = true
-                        local conn = utility:Connection(part:GetPropertyChangedSignal("Color"), function()
-                            if part.Parent and char_custom_enabled.skin_color then
-                                local current_wanted = cheat_client.config.char_custom_skin_color
-                                if part.Color ~= current_wanted then
-                                    part.Color = current_wanted
-                                end
-                            end
-                        end)
-                        table.insert(char_monitor_connections, conn)
-                    end
-                end
-
-                local function lock_skin_parts()
-                    if not char_custom_enabled.skin_color then return end
-                    for _, part in ipairs(get_skin_body_parts(character)) do
-                        lock_skin_part(part)
-                    end
-                end
-
-                local function lock_body_colors(body_colors)
-                    if not body_colors or not body_colors:IsA("BodyColors") or not char_custom_enabled.skin_color then return end
-
-                    local props = {"HeadColor3", "TorsoColor3", "LeftArmColor3", "RightArmColor3", "LeftLegColor3", "RightLegColor3"}
-                    local state = skin_monitored[body_colors]
-                    if type(state) ~= "table" then
-                        state = {}
-                        skin_monitored[body_colors] = state
-                    end
-
-                    for _, prop in ipairs(props) do
-                        local wanted = config.char_custom_skin_color
-                        if body_colors[prop] ~= wanted then
-                            body_colors[prop] = wanted
-                        end
-
-                        if utility and not state[prop] then
-                            state[prop] = true
-                            local conn = utility:Connection(body_colors:GetPropertyChangedSignal(prop), function()
-                                if body_colors.Parent and char_custom_enabled.skin_color then
-                                    local current_wanted = cheat_client.config.char_custom_skin_color
-                                    if body_colors[prop] ~= current_wanted then
-                                        body_colors[prop] = current_wanted
-                                    end
-                                end
-                            end)
-                            table.insert(char_monitor_connections, conn)
-                        end
-                    end
-                end
-
-                local function enforce_existing()
-                    if not character.Parent then return end
-
-                    if char_custom_enabled.face and config.char_custom_face ~= "" then
-                        apply_face(character, config.char_custom_face)
-                    end
-
-                    if char_custom_enabled.shirt and config.char_custom_shirt ~= "" then
-                        apply_shirt(character, config.char_custom_shirt)
-                        local shirt = FindFirstChildOfClass(character, "Shirt")
-                        if shirt and config.outfit_shirt_color then
-                            shirt.Color3 = config.outfit_shirt_color
-                            lock_color_property(shirt, "Color3", config.outfit_shirt_color)
-                        end
-                    end
-
-                    if char_custom_enabled.pants and config.char_custom_pants ~= "" then
-                        apply_pants(character, config.char_custom_pants)
-                        local pants = FindFirstChildOfClass(character, "Pants")
-                        if pants and config.outfit_pants_color then
-                            pants.Color3 = config.outfit_pants_color
-                            lock_color_property(pants, "Color3", config.outfit_pants_color)
-                        end
-                    end
-
-                    if char_custom_enabled.skin_color then
-                        apply_skin_color(character, config.char_custom_skin_color)
-                        lock_body_colors(FindFirstChildOfClass(character, "BodyColors"))
-                        lock_skin_parts()
-                    end
+                    end)
 
                     local head = FindFirstChild(character, "Head")
                     if head then
-                        lock_rlface(FindFirstChild(head, "RLFace"))
+                        local face_conn = utility:Connection(head.ChildAdded, function(child)
+                            if reapply_debounce then return end
+                            if child:IsA("Decal") and config.char_custom_face ~= "" then
+                                task.wait(0.1)
+                                local expected_texture = config.char_custom_face:match("^rbxassetid://") and config.char_custom_face or ("rbxassetid://" .. config.char_custom_face)
+                                if child.Texture ~= expected_texture then
+                                    reapply_debounce = true
+                                    apply_face(character, config.char_custom_face)
+                                    task.wait(0.5)
+                                    reapply_debounce = false
+                                end
+                            end
+                        end)
+                        table.insert(char_monitor_connections, face_conn)
                     end
 
-                    if char_custom_enabled.hair_color then
-                        for _, special_mesh in ipairs(get_hair_recolor_meshes(character)) do
-                            lock_hair_mesh(special_mesh)
-                        end
-                    end
-
-                    if char_custom_enabled.edict then
-                        local edict_decal = apply_edict_spoof(character, config.char_custom_edict)
-                        if edict_decal then
-                            lock_edict_decal(edict_decal)
-                        end
-                    end
-
-                    if char_custom_enabled.metal_arm then
-                        apply_metal_arm(character)
-                    end
-
-                    if char_custom_enabled.clothing_dye then
-                        apply_clothing_dye(character, config.char_custom_clothing_dye)
-                        local shirt = FindFirstChildOfClass(character, "Shirt")
-                        local pants = FindFirstChildOfClass(character, "Pants")
-                        if shirt then lock_color_property(shirt, "Color3", config.char_custom_clothing_dye) end
-                        if pants then lock_color_property(pants, "Color3", config.char_custom_clothing_dye) end
-                    end
-
-                    if char_custom_enabled.accessories and config.char_custom_accessories ~= "" and head then
-                        apply_accessories(character, config.char_custom_accessories)
-                    end
+                    table.insert(char_monitor_connections, shirt_conn)
+                    table.insert(char_monitor_connections, body_conn)
                 end
 
-                -- Bind BEFORE applying. If the game inserts default cosmetics during this call,
-                -- the callbacks below replace them in the same event turn instead of 0.1-0.5s later.
                 if utility then
-                    local child_conn = utility:Connection(character.ChildAdded, function(child)
-                        if not character.Parent or reapply_debounce then return end
-
-                        -- Cache/recolor newly inserted body parts before Rogue gets a rendered frame.
-                        -- This is independent of the elseif chain so Head still receives face/accessory logic.
-                        if is_skin_body_part(child) then
-                            if not original_char_state.skin_color then
-                                original_char_state.skin_color = child.Color
-                            end
-                            if char_custom_enabled.skin_color then
-                                lock_skin_part(child)
-                            end
-                        end
-
-                        -- Left Arm/Torso can arrive after CharacterAdded. Retry the Metal Arm on
-                        -- those exact insertion events so there is no arbitrary wait.
-                        if char_custom_enabled.metal_arm and (
-                            child.Name == "Left Arm"
-                            or child.Name == "Brazo izquierdo"
-                            or child.Name == "LeftUpperArm"
-                            or child.Name == "Torso"
-                            or child.Name == "UpperTorso"
-                        ) then
-                            with_reapply_lock(function()
-                                apply_metal_arm(character)
-                            end)
-                        end
-
-                        if child:IsA("Shirt") and char_custom_enabled.shirt and config.char_custom_shirt ~= "" then
-                            with_reapply_lock(function()
-                                apply_shirt(character, config.char_custom_shirt)
-                                local shirt = FindFirstChildOfClass(character, "Shirt")
-                                if shirt then
-                                    if char_custom_enabled.clothing_dye then
-                                        shirt.Color3 = config.char_custom_clothing_dye
-                                        lock_color_property(shirt, "Color3", config.char_custom_clothing_dye)
-                                    elseif config.outfit_shirt_color then
-                                        shirt.Color3 = config.outfit_shirt_color
-                                        lock_color_property(shirt, "Color3", config.outfit_shirt_color)
-                                    end
-                                end
-                            end)
-                        elseif child:IsA("Pants") and char_custom_enabled.pants and config.char_custom_pants ~= "" then
-                            with_reapply_lock(function()
-                                apply_pants(character, config.char_custom_pants)
-                                local pants = FindFirstChildOfClass(character, "Pants")
-                                if pants then
-                                    if char_custom_enabled.clothing_dye then
-                                        pants.Color3 = config.char_custom_clothing_dye
-                                        lock_color_property(pants, "Color3", config.char_custom_clothing_dye)
-                                    elseif config.outfit_pants_color then
-                                        pants.Color3 = config.outfit_pants_color
-                                        lock_color_property(pants, "Color3", config.outfit_pants_color)
-                                    end
-                                end
-                            end)
-                        elseif child:IsA("BodyColors") and char_custom_enabled.skin_color then
-                            with_reapply_lock(function()
-                                apply_skin_color(character, config.char_custom_skin_color)
-                                lock_body_colors(child)
-                                lock_skin_parts()
-                            end)
-                        elseif child.Name:match("^Asset:%d+$") and char_custom_enabled.hair_color then
-                            -- Cosmetic asset arrived after CharacterAdded. Recolor immediately if
-                            -- its Handle/SpecialMesh is already present; DescendantAdded catches it
-                            -- on the same insertion event if the mesh is added a moment later.
-                            local handle = FindFirstChild(child, "Handle")
-                            local special_mesh = handle and FindFirstChildWhichIsA(handle, "SpecialMesh")
-                            if special_mesh then
-                                lock_hair_mesh(special_mesh)
-                            end
-                        elseif child.Name == "Head" or child.Name == "Cabeza" then
-                            with_reapply_lock(function()
-                                apply_face(character, config.char_custom_face)
-                                apply_rlface_color(character, config.char_custom_rlface_color)
-                                if char_custom_enabled.edict then
-                                    local edict_decal = apply_edict_spoof(character, config.char_custom_edict)
-                                    if edict_decal then
-                                        lock_edict_decal(edict_decal)
-                                    end
-                                end
-                                if char_custom_enabled.accessories and config.char_custom_accessories ~= "" then
-                                    apply_accessories(character, config.char_custom_accessories)
-                                end
-                            end)
-                        end
-                    end)
-                    table.insert(char_monitor_connections, child_conn)
-
-                    -- Do NOT watch Arm/ArmPlate removal. When Rogue breaks the character's
-                    -- joints during death/reset, the metal pieces may be detached/removed before
-                    -- CharacterRemoving fires. Recreating them here makes the spoof fight the
-                    -- death teardown. The toggle remains enabled, so the NEXT CharacterAdded
-                    -- still receives Metal Arm immediately on its frame-one customization pass.
-
-                    local descendant_conn = utility:Connection(character.DescendantAdded, function(descendant)
-                        if not character.Parent then return end
-                        if descendant.Name == "FacialMarking" and descendant:IsA("Decal") and char_custom_enabled.edict then
-                            -- Rogue may insert the real Edict marking after Head. Switch from any
-                            -- temporary spoof decal to this real one on the exact insertion event.
-                            lock_edict_decal(descendant)
-                        elseif descendant.Name == "RLFace" and descendant:IsA("Decal") then
-                            -- RLFace can be inserted after Head; catch it on the exact insertion event.
-                            lock_rlface(descendant)
-                        elseif descendant:IsA("SpecialMesh") and char_custom_enabled.hair_color then
-                            local handle = descendant.Parent
-                            local asset = handle and handle.Parent
-                            if handle and handle.Name == "Handle" and asset and asset.Name:match("^Asset:%d+$") then
-                                -- Frame-one hair/accessory recolor for late-loaded SpecialMesh objects.
-                                lock_hair_mesh(descendant)
-                            end
-                        end
-                    end)
-                    table.insert(char_monitor_connections, descendant_conn)
+                    setup_monitoring()
                 end
-
-                -- Frame-one pass: no Humanoid/Head/RLFace waits. Clothing and BodyColors can
-                -- be created immediately; face/accessories are caught by DescendantAdded if late.
-                with_reapply_lock(enforce_existing)
             end
 
             local function clear_all_customizations(character)
@@ -12816,10 +11413,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     apply_all_customizations(character)
                 end)
 
-                utility:Connection(plr.CharacterRemoving, function(character)
-                    -- Keep the Metal Arm toggle/config enabled across deaths so CharacterAdded
-                    -- can apply it to the new character immediately. We only tear down the old
-                    -- character's monitoring connections; nothing tries to repair the dying body.
+                utility:Connection(plr.CharacterRemoving, function()
                     for _, conn in ipairs(char_monitor_connections) do
                         pcall(function() conn:Disconnect() end)
                     end
@@ -12834,361 +11428,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             cheat_client.char_custom_restore = restore_original_state
             cheat_client.char_custom_setup = setup_char_customization
             cheat_client.char_custom_enabled = char_custom_enabled
-
-            -- Character-copy helpers. Only actual players whose Character is currently
-            -- spawned under workspace.Live are exposed in the dropdown.
-            local function get_spawned_copy_players()
-                local names = {}
-
-                for _, player in ipairs(plrs:GetPlayers()) do
-                    local character = player.Character
-                    if character and character.Parent == live_folder then
-                        names[#names + 1] = player.Name
-                    end
-                end
-
-                table.sort(names, function(a, b)
-                    return string.lower(a) < string.lower(b)
-                end)
-
-                return names
-            end
-
-            local function get_copy_source_player()
-                local selected = Options and Options.char_copy_player and Options.char_copy_player.Value
-                if not selected or selected == "" then
-                    library:Notify("Select a spawned player first")
-                    return nil, nil
-                end
-
-                local source_player = FindFirstChild(plrs, selected)
-                local source_character = source_player and source_player.Character
-
-                if not source_player or not source_character or source_character.Parent ~= live_folder then
-                    library:Notify("That player is no longer spawned")
-                    return nil, nil
-                end
-
-                return source_player, source_character
-            end
-
-            local function set_color_picker_value(option_name, color)
-                local option = Options and Options[option_name]
-                if not option or not color then return end
-
-                pcall(function()
-                    if option.SetValueRGB then
-                        option:SetValueRGB(color)
-                    elseif option.SetValue then
-                        option:SetValue(color)
-                    end
-                end)
-            end
-
-            local function apply_copied_settings_if_enabled()
-                if not (Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value) then
-                    return
-                end
-
-                if not char_custom_connection then
-                    setup_char_customization()
-                elseif plr.Character then
-                    apply_all_customizations(plr.Character)
-                end
-            end
-
-            local function normalize_asset_id(value)
-                if value == nil then return nil end
-
-                local raw = tostring(value)
-                local id = raw:match("rbxassetid://(%d+)")
-                    or raw:match("asset/%?id=(%d+)")
-                    or raw:match("[?&]id=(%d+)")
-                    or raw:match("^Asset:(%d+)$")
-                    or raw:match("^(%d+)$")
-
-                local number_id = id and tonumber(id)
-                if number_id and number_id > 0 then
-                    return tostring(math.floor(number_id))
-                end
-
-                return nil
-            end
-
-            local function get_accessory_ids_from_character(character)
-                local ids = {}
-                local seen = {}
-
-                local function add_id(value)
-                    local id = normalize_asset_id(value)
-                    if id and not seen[id] then
-                        seen[id] = true
-                        ids[#ids + 1] = id
-                    end
-                end
-
-                -- Prefer IDs directly associated with accessories that are actually on the
-                -- spawned character. SourceAssetId works for accessories loaded from assets.
-                for _, child in ipairs(character:GetChildren()) do
-                    if child:IsA("Accessory") then
-                        local source_asset_id
-                        pcall(function()
-                            source_asset_id = child.SourceAssetId
-                        end)
-                        add_id(source_asset_id)
-
-                        if not normalize_asset_id(source_asset_id) then
-                            add_id(child:GetAttribute("AssetId"))
-                            add_id(child:GetAttribute("AccessoryId"))
-                            add_id(child:GetAttribute("ID"))
-                            add_id(child.Name)
-
-                            for _, value_name in ipairs({"AssetId", "AccessoryId", "ID"}) do
-                                local value_object = child:FindFirstChild(value_name, true)
-                                if value_object and (value_object:IsA("StringValue") or value_object:IsA("IntValue") or value_object:IsA("NumberValue")) then
-                                    add_id(value_object.Value)
-                                end
-                            end
-                        end
-                    end
-                end
-
-                -- Fallback/supplement for normal Roblox avatar accessories.
-                local humanoid = FindFirstChildOfClass(character, "Humanoid")
-                if humanoid then
-                    local ok_description, description = pcall(humanoid.GetAppliedDescription, humanoid)
-                    if ok_description and description then
-                        local ok_accessories, accessories = pcall(description.GetAccessories, description, true)
-                        if ok_accessories and type(accessories) == "table" then
-                            for _, info in ipairs(accessories) do
-                                if type(info) == "table" then
-                                    add_id(info.AssetId)
-                                end
-                            end
-                        end
-                    end
-                end
-
-                return table.concat(ids, ",")
-            end
-
-            local function copy_face_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                local head = FindFirstChild(character, "Head")
-                local rlface = head and FindFirstChild(head, "RLFace")
-                if not (rlface and rlface:IsA("Decal")) then
-                    library:Notify(source_player.Name .. " has no RLFace to copy")
-                    return
-                end
-
-                local texture = rlface.Texture or ""
-                cheat_client.config.char_custom_face = texture
-                char_custom_enabled.face = texture ~= ""
-
-                if Options and Options.char_custom_face then
-                    Options.char_custom_face:SetValue(texture)
-                end
-
-                apply_copied_settings_if_enabled()
-                library:Notify("Copied face from " .. source_player.Name)
-            end
-
-            local function copy_accessories_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                local ids = get_accessory_ids_from_character(character)
-                cheat_client.config.char_custom_accessories = ids
-                char_custom_enabled.accessories = ids ~= ""
-
-                if Options and Options.char_custom_accessories then
-                    Options.char_custom_accessories:SetValue(ids)
-                end
-
-                if ids == "" and plr.Character and Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value then
-                    for _, acc in ipairs(current_accessories) do
-                        if acc and acc.Parent then
-                            acc:Destroy()
-                        end
-                    end
-                    current_accessories = {}
-                    for _, child in ipairs(plr.Character:GetChildren()) do
-                        if child:IsA("Accessory") then
-                            child:Destroy()
-                        end
-                    end
-                end
-
-                apply_copied_settings_if_enabled()
-
-                if ids == "" then
-                    library:Notify("Copied accessories from " .. source_player.Name .. " (none)")
-                else
-                    library:Notify("Copied accessories from " .. source_player.Name)
-                end
-            end
-
-            local function copy_skin_color_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                -- Copy what the selected player's body is actually rendering. BodyColors can
-                -- be stale in Rogue, so it is only used as a fallback by get_visible_skin_color.
-                local color = get_visible_skin_color(character)
-
-                if not color then
-                    library:Notify("Could not read " .. source_player.Name .. "'s visible skin color")
-                    return
-                end
-
-                cheat_client.config.char_custom_skin_color = color
-                char_custom_enabled.skin_color = true
-                set_color_picker_value("char_custom_skin_color", color)
-
-                apply_copied_settings_if_enabled()
-                library:Notify("Copied visible skin color from " .. source_player.Name)
-            end
-
-            local function copy_face_color_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                local head = FindFirstChild(character, "Head")
-                local rlface = head and FindFirstChild(head, "RLFace")
-                if not (rlface and rlface:IsA("Decal")) then
-                    library:Notify(source_player.Name .. " has no RLFace color to copy")
-                    return
-                end
-
-                local color = rlface.Color3
-                cheat_client.config.char_custom_rlface_color = color
-                char_custom_enabled.rlface_color = true
-                set_color_picker_value("char_custom_rlface_color", color)
-
-                apply_copied_settings_if_enabled()
-                library:Notify("Copied face color from " .. source_player.Name)
-            end
-
-            local function copy_hair_color_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                local chosen_mesh = nil
-                local fallback_mesh = nil
-
-                -- Prefer a cosmetic whose Handle actually has HairAttachment. This avoids
-                -- copying a hat/accessory tint when the player has multiple Asset:<id> models.
-                for _, asset in ipairs(character:GetChildren()) do
-                    if asset.Name:match("^Asset:%d+$") then
-                        local handle = FindFirstChild(asset, "Handle")
-                        local special_mesh = handle and FindFirstChildWhichIsA(handle, "SpecialMesh")
-                        if special_mesh then
-                            fallback_mesh = fallback_mesh or special_mesh
-                            if FindFirstChild(handle, "HairAttachment") then
-                                chosen_mesh = special_mesh
-                                break
-                            end
-                        end
-                    end
-                end
-
-                chosen_mesh = chosen_mesh or fallback_mesh
-                if not chosen_mesh then
-                    library:Notify(source_player.Name .. " has no SpecialMesh hair/accessory color to copy")
-                    return
-                end
-
-                local color = vertex_color_to_color3(chosen_mesh.VertexColor)
-                if not color then
-                    library:Notify("Could not read " .. source_player.Name .. "'s hair color")
-                    return
-                end
-
-                cheat_client.config.char_custom_hair_color = color
-                char_custom_enabled.hair_color = true
-                set_color_picker_value("char_custom_hair_color", color)
-
-                apply_copied_settings_if_enabled()
-                library:Notify("Copied hair color from " .. source_player.Name)
-            end
-
-            local function copy_clothing_from_selected_player()
-                local source_player, character = get_copy_source_player()
-                if not source_player then return end
-
-                local shirt = FindFirstChildOfClass(character, "Shirt")
-                local pants = FindFirstChildOfClass(character, "Pants")
-
-                local shirt_template = shirt and shirt.ShirtTemplate or ""
-                local pants_template = pants and pants.PantsTemplate or ""
-
-                cheat_client.config.char_custom_shirt = shirt_template
-                cheat_client.config.char_custom_pants = pants_template
-                cheat_client.config.outfit_shirt_color = shirt and shirt.Color3 or nil
-                cheat_client.config.outfit_pants_color = pants and pants.Color3 or nil
-
-                char_custom_enabled.shirt = shirt_template ~= ""
-                char_custom_enabled.pants = pants_template ~= ""
-
-                if Options and Options.char_custom_shirt then
-                    Options.char_custom_shirt:SetValue(shirt_template)
-                end
-                if Options and Options.char_custom_pants then
-                    Options.char_custom_pants:SetValue(pants_template)
-                end
-
-                -- The existing UI has one shared dye picker. Keep each copied clothing item's
-                -- exact Color3 in outfit_shirt_color/outfit_pants_color, and mirror the shirt
-                -- color (or pants color if there is no shirt) into the visible dye picker.
-                local display_dye = (shirt and shirt.Color3) or (pants and pants.Color3)
-                if display_dye then
-                    cheat_client.config.char_custom_clothing_dye = display_dye
-                    set_color_picker_value("char_custom_clothing_dye", display_dye)
-                end
-
-                -- Use the per-item copied colors so differing shirt/pants dyes remain exact.
-                char_custom_enabled.clothing_dye = false
-
-                -- If the source has no shirt/pants, remove that item immediately when the
-                -- customization master is active so copying also matches an empty slot.
-                if plr.Character and Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value then
-                    if not shirt then
-                        clear_character_item(plr.Character, "Shirt")
-                    end
-                    if not pants then
-                        clear_character_item(plr.Character, "Pants")
-                    end
-                end
-
-                apply_copied_settings_if_enabled()
-
-                if shirt_template == "" and pants_template == "" then
-                    library:Notify("Copied clothing from " .. source_player.Name .. " (none)")
-                else
-                    library:Notify("Copied clothing + dye from " .. source_player.Name)
-                end
-            end
-
-            local function refresh_copy_player_dropdown()
-                local values = get_spawned_copy_players()
-                local option = Options and Options.char_copy_player
-                if not option then return end
-
-                local previous = option.Value
-                pcall(function()
-                    option:SetValues(values)
-                end)
-
-                if previous and table.find(values, previous) then
-                    pcall(function() option:SetValue(previous) end)
-                elseif #values > 0 then
-                    pcall(function() option:SetValue(values[1]) end)
-                else
-                    pcall(function() option:SetValue(nil) end)
-                end
-            end
 
             group_spoofing:AddToggle("streamer_mode", {
                 Text = "Streamer Mode",
@@ -13357,16 +11596,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             char_custom_enabled[type_name] = false
                         end
 
-                        cheat_client.config.edict_spoof = false
-                        if Toggles and Toggles.edict_spoof and Toggles.edict_spoof.Value then
-                            Toggles.edict_spoof:SetValue(false)
-                        end
-
-                        cheat_client.config.metal_arm = false
-                        if Toggles and Toggles.metal_arm and Toggles.metal_arm.Value then
-                            Toggles.metal_arm:SetValue(false)
-                        end
-
                         if char_custom_connection then
                             char_custom_connection:Disconnect()
                             char_custom_connection = nil
@@ -13397,68 +11626,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     setup_char_customization()
                 end)
             end
-
-            group_spoofing:AddToggle("metal_arm", {
-                Text = "Metal Arm",
-                Default = cheat_client.config.metal_arm,
-                Callback = function(value)
-                    cheat_client.config.metal_arm = value
-                    char_custom_enabled.metal_arm = value
-
-                    if value then
-                        -- Treat this as part of Character Customization. If the master is off,
-                        -- enable it automatically so the respawn/late-load reapply system is active.
-                        if Toggles and Toggles.char_customization_master and not Toggles.char_customization_master.Value then
-                            Toggles.char_customization_master:SetValue(true)
-                        elseif not char_custom_connection then
-                            setup_char_customization()
-                        elseif plr.Character then
-                            apply_all_customizations(plr.Character)
-                        end
-
-                        if plr.Character then
-                            apply_metal_arm(plr.Character)
-                        end
-                    else
-                        if plr.Character then
-                            remove_metal_arm_spoof(plr.Character)
-                        end
-                    end
-                end,
-                Tooltip = "Adds the Metal Arm + ArmPlate and rewires both welds to your own Left Arm/Torso"
-            })
-
-            local initial_copy_players = get_spawned_copy_players()
-            group_spoofing:AddDropdown("char_copy_player", {
-                Values = initial_copy_players,
-                Default = initial_copy_players[1],
-                Multi = false,
-                Text = "Copy From Player",
-                Tooltip = "Only players currently spawned in workspace.Live are shown",
-                Callback = function(value)
-                end
-            })
-
-            -- Keep the list live as characters spawn/despawn. The dropdown itself is filtered
-            -- against Players, so non-player models under workspace.Live never appear.
-            utility:Connection(live_folder.ChildAdded, function(child)
-                if child:IsA("Model") then
-                    task.defer(refresh_copy_player_dropdown)
-                end
-            end)
-            utility:Connection(live_folder.ChildRemoved, function(child)
-                if child:IsA("Model") then
-                    task.defer(refresh_copy_player_dropdown)
-                end
-            end)
-            utility:Connection(plrs.PlayerAdded, function()
-                task.defer(refresh_copy_player_dropdown)
-            end)
-            utility:Connection(plrs.PlayerRemoving, function()
-                task.defer(refresh_copy_player_dropdown)
-            end)
-
-            group_spoofing:AddDivider()
 
             local face_presets = get_face_presets()
             local face_preset_names = {}
@@ -13494,12 +11661,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Callback = function(value)
                     cheat_client.config.char_custom_face = value
                 end
-            })
-
-            group_spoofing:AddButton({
-                Text = "Copy Face From Player",
-                Func = copy_face_from_selected_player,
-                Tooltip = "Copies the selected spawned player's RLFace texture into Face ID"
             })
 
             group_spoofing:AddButton({
@@ -13603,12 +11764,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     end
                 end,
                 Tooltip = "Applies both shirt and pants from the selected outfit"
-            })
-
-            group_spoofing:AddButton({
-                Text = "Copy Clothing + Dye From Player",
-                Func = copy_clothing_from_selected_player,
-                Tooltip = "Copies Shirt, Pants, and their current clothing colors from the selected spawned player"
             })
 
             group_spoofing:AddInput("char_custom_shirt", {
@@ -13740,12 +11895,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             })
 
             group_spoofing:AddButton({
-                Text = "Copy Accessories From Player",
-                Func = copy_accessories_from_selected_player,
-                Tooltip = "Copies accessory asset IDs from the selected spawned player"
-            })
-
-            group_spoofing:AddButton({
                 Text = "Apply Accessories",
                 Func = function()
                     if not (Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value) then
@@ -13807,12 +11956,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             })
 
             group_spoofing:AddButton({
-                Text = "Copy Skin Color From Player",
-                Func = copy_skin_color_from_selected_player,
-                Tooltip = "Copies the selected spawned player's current skin color"
-            })
-
-            group_spoofing:AddButton({
                 Text = "Apply Skin Color",
                 Func = function()
                     if not (Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value) then
@@ -13825,18 +11968,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     char_custom_enabled.skin_color = true
 
                     if not char_custom_connection then
-                        -- setup_char_customization() immediately runs apply_all_customizations()
-                        -- for the current character and installs the skin locks.
                         setup_char_customization()
-                    elseif plr.Character then
-                        -- Rebuild monitors because Skin Color may have been disabled when the
-                        -- customization monitor was originally created.
-                        apply_all_customizations(plr.Character)
                     end
 
                     if plr.Character then
                         apply_skin_color(plr.Character, value)
-                        library:Notify("Skin color enabled & applied to visible body")
+                        library:Notify("Skin color enabled & applied")
                     else
                         library:Notify("Skin color enabled")
                     end
@@ -13861,7 +11998,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         body_colors.RightArmColor3 = original_char_state.skin_color
                         body_colors.LeftLegColor3 = original_char_state.skin_color
                         body_colors.RightLegColor3 = original_char_state.skin_color
-                        set_visible_skin_parts(plr.Character, original_char_state.skin_color)
                         library:Notify("Skin color disabled & cleared")
                     else
                         library:Notify("Skin color disabled")
@@ -13936,12 +12072,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             })
 
             group_spoofing:AddButton({
-                Text = "Copy Face Color From Player",
-                Func = copy_face_color_from_selected_player,
-                Tooltip = "Copies the selected spawned player's RLFace Color3"
-            })
-
-            group_spoofing:AddButton({
                 Text = "Apply RLFace Color",
                 Func = function()
                     if not (Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value) then
@@ -13987,131 +12117,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
             })
 
-            group_spoofing:AddLabel("Hair Recolor"):AddColorPicker("char_custom_hair_color", {
-                Default = cheat_client.config.char_custom_hair_color,
-                Title = "Hair Recolor",
-                Transparency = 0,
-                Callback = function(value)
-                    cheat_client.config.char_custom_hair_color = value
-                end
-            })
-
-            group_spoofing:AddButton({
-                Text = "Copy Hair Color From Player",
-                Func = copy_hair_color_from_selected_player,
-                Tooltip = "Copies the selected spawned player's hair SpecialMesh VertexColor"
-            })
-
-            group_spoofing:AddButton({
-                Text = "Apply Hair Recolor",
-                Func = function()
-                    if not (Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value) then
-                        library:Notify("Enable Character Customization master toggle first!")
-                        return
-                    end
-
-                    local value = (Options and Options.char_custom_hair_color and Options.char_custom_hair_color.Value)
-                        or cheat_client.config.char_custom_hair_color
-                    cheat_client.config.char_custom_hair_color = value
-                    char_custom_enabled.hair_color = true
-
-                    if not char_custom_connection then
-                        setup_char_customization()
-                    end
-
-                    if plr.Character then
-                        apply_hair_recolor(plr.Character, value)
-                        -- Rebuild the per-character monitors so current and late hair meshes
-                        -- stay locked to the selected VertexColor through respawns/reloads.
-                        apply_all_customizations(plr.Character)
-                        library:Notify("Hair recolor enabled & applied")
-                    else
-                        library:Notify("Hair recolor enabled")
-                    end
-                end
-            })
-
-            group_spoofing:AddButton({
-                Text = "Clear Hair Recolor",
-                Func = function()
-                    cheat_client.config.char_custom_hair_color = Color3.fromRGB(255, 253, 247)
-                    char_custom_enabled.hair_color = false
-
-                    if plr.Character then
-                        restore_hair_recolor(plr.Character)
-                        library:Notify("Hair recolor disabled & cleared")
-                    else
-                        library:Notify("Hair recolor disabled")
-                    end
-                end
-            })
-
-            group_spoofing:AddDropdown("char_custom_edict", {
-                Values = {"Blademaster", "Healer", "Seer"},
-                Default = cheat_client.config.char_custom_edict or "Blademaster",
-                Multi = false,
-                Text = "Spoof Edict",
-                Tooltip = "Selects the FacialMarking texture used by Edict Spoof",
-                Callback = function(value)
-                    if not EDICT_TEXTURES[value] then return end
-                    cheat_client.config.char_custom_edict = value
-
-                    if char_custom_enabled.edict and plr.Character then
-                        local decal = apply_edict_spoof(plr.Character, value)
-                        if decal then
-                            apply_edict_properties(decal, value)
-                        end
-                        -- Rebuild the monitor so the new choice stays locked on this character.
-                        apply_all_customizations(plr.Character)
-                    end
-                end
-            })
-
-            group_spoofing:AddToggle("edict_spoof", {
-                Text = "Enable Edict Spoof",
-                Default = cheat_client.config.edict_spoof or false,
-                Callback = function(value)
-                    cheat_client.config.edict_spoof = value
-                    char_custom_enabled.edict = value
-
-                    if value then
-                        if not EDICT_TEXTURES[cheat_client.config.char_custom_edict] then
-                            cheat_client.config.char_custom_edict = "Blademaster"
-                            if Options and Options.char_custom_edict then
-                                pcall(function() Options.char_custom_edict:SetValue("Blademaster") end)
-                            end
-                        end
-
-                        -- Edict spoof participates in the frame-one character customization pass.
-                        if Toggles and Toggles.char_customization_master and not Toggles.char_customization_master.Value then
-                            Toggles.char_customization_master:SetValue(true)
-                        elseif not char_custom_connection then
-                            setup_char_customization()
-                        elseif plr.Character then
-                            apply_all_customizations(plr.Character)
-                        end
-
-                        if plr.Character then
-                            local decal = apply_edict_spoof(plr.Character, cheat_client.config.char_custom_edict)
-                            if decal then
-                                apply_edict_properties(decal, cheat_client.config.char_custom_edict)
-                            end
-                        end
-                    else
-                        if plr.Character then
-                            restore_edict_spoof(plr.Character)
-
-                            -- Remove old Edict property-lock connections while preserving the
-                            -- rest of the currently enabled character customizations.
-                            if Toggles and Toggles.char_customization_master and Toggles.char_customization_master.Value then
-                                apply_all_customizations(plr.Character)
-                            end
-                        end
-                    end
-                end,
-                Tooltip = "Spoofs Head.FacialMarking as Blademaster, Healer, or Seer and reapplies on respawn"
-            })
-
             group_spoofing:AddDivider()
 
             group_spoofing:AddButton({
@@ -14123,11 +12128,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     cheat_client.config.char_custom_accessories = ""
                     cheat_client.config.char_custom_skin_color = Color3.fromRGB(255, 253, 247)
                     cheat_client.config.char_custom_rlface_color = Color3.fromRGB(255, 253, 247)
-                    cheat_client.config.char_custom_hair_color = Color3.fromRGB(255, 253, 247)
                     cheat_client.config.char_custom_clothing_dye = Color3.fromRGB(255, 253, 247)
-                    cheat_client.config.edict_spoof = false
-                    cheat_client.config.char_custom_edict = "Blademaster"
-                    cheat_client.config.metal_arm = false
 
                     char_custom_enabled.face = false
                     char_custom_enabled.shirt = false
@@ -14135,17 +12136,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     char_custom_enabled.accessories = false
                     char_custom_enabled.skin_color = false
                     char_custom_enabled.rlface_color = false
-                    char_custom_enabled.hair_color = false
-                    char_custom_enabled.edict = false
-                    char_custom_enabled.metal_arm = false
                     char_custom_enabled.clothing_dye = false
-
-                    if Toggles and Toggles.edict_spoof and Toggles.edict_spoof.Value then
-                        Toggles.edict_spoof:SetValue(false)
-                    end
-                    if Toggles and Toggles.metal_arm and Toggles.metal_arm.Value then
-                        Toggles.metal_arm:SetValue(false)
-                    end
 
                     if char_custom_connection then
                         char_custom_connection:Disconnect()
@@ -14324,7 +12315,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 session_start_time = 0,
                 moderator_detected = false,
                 gate_in_progress = false,
-                idol_pop_in_progress = false,
                 pending_artifact_logs = {},
                 pending_pickup_ids = {}
             }
@@ -15446,7 +13436,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                     reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                     hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
-                    auto_pop_idol_of_war = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value or false,
                     time_between_looting = Options.TimeBetweenLooting and Options.TimeBetweenLooting.Value or 5,
                     proximity_check = Options.ProximityCheck and Options.ProximityCheck.Value or 0,
                     critical_distance = Options.CriticalDistance and Options.CriticalDistance.Value or 60,
@@ -15938,11 +13927,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 local ping
                 if cr_minutes >= 120 then
-                    ping = "<@&1547048827385552898>"
+                    ping = "<@here>"
                 elseif cr_minutes >= 60 then
-                    ping = "<@&1547048803763355799>"
+                    ping = "<@here>"
                 elseif cr_minutes >= 35 and player_count >= 15 then
-                    ping = "<@&1547048803763355799>"
+                    ping = "<@here>"
                 else
                     return
                 end
@@ -16852,7 +14841,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     local humanoid = FindFirstChildOfClass(plr.Character, "Humanoid")
                     local pebble_mode = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value
 
-                    if humanoid and pebble_mode and (not trinket_bot.idol_pop_in_progress or trinket_bot.gate_in_progress) then
+                    if humanoid and pebble_mode then
                         if trinket_bot.gate_in_progress then
                             local gate_in_backpack = FindFirstChild(plr.Backpack, "Gate")
                             local gate_equipped = FindFirstChild(plr.Character, "Gate")
@@ -16873,7 +14862,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 end
                             end
                         end
-                    elseif not trinket_bot.idol_pop_in_progress and Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
+                    elseif Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
                         local gate_in_backpack = FindFirstChild(plr.Backpack, "Gate")
                         local gate_equipped = FindFirstChild(plr.Character, "Gate")
                         if gate_in_backpack and not gate_equipped and humanoid then
@@ -19342,7 +17331,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 if Toggles.StayInServer then Toggles.StayInServer:SetValue(settings.stay_in_server or false) end
                 if Toggles.ReequipGateInLoop then Toggles.ReequipGateInLoop:SetValue(settings.reequip_gate_in_loop == nil and true or settings.reequip_gate_in_loop) end
                 if Toggles.HoldPebbleInLoop then Toggles.HoldPebbleInLoop:SetValue(settings.hold_pebble_in_loop or false) end
-                if Toggles.AutoPopIdolOfWar then Toggles.AutoPopIdolOfWar:SetValue(settings.auto_pop_idol_of_war or false) end
                 if Options.TimeBetweenLooting then Options.TimeBetweenLooting:SetValue(settings.time_between_looting or 5) end
                 if Options.ProximityCheck then Options.ProximityCheck:SetValue(settings.proximity_check or 0) end
                 if Options.CriticalDistance then Options.CriticalDistance:SetValue(settings.critical_distance or 60) end
@@ -20316,7 +18304,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                             reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                             hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
-                            auto_pop_idol_of_war = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value or false,
                             time_between_looting = Options.TimeBetweenLooting and Options.TimeBetweenLooting.Value or 5,
                             proximity_check = Options.ProximityCheck and Options.ProximityCheck.Value or 0,
                             critical_distance = Options.CriticalDistance and Options.CriticalDistance.Value or 60,
@@ -20579,79 +18566,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.hold_pebble_in_loop,
                 Tooltip = "Keeps Pebble equipped while looting; Gate automatically takes priority during gate attempts"
             })
-
-            group_trinket_looping:AddToggle("AutoPopIdolOfWar", {
-                Text = "Auto Pop Idol of Wars",
-                Default = cheat_client.config.auto_pop_idol_of_war,
-                Tooltip = "Automatically equips and uses Idol of War until it is consumed, then repeats for the next one",
-                Callback = function(value)
-                    cheat_client.config.auto_pop_idol_of_war = value
-                    if not value then
-                        trinket_bot.idol_pop_in_progress = false
-                    end
-                end
-            })
-
-            local IDOL_ITEM = "Idol of War"
-            local IDOL_LOOP_INTERVAL = 0.6
-            local IDOL_USE_DELAY = 0.5
-
-            local function click_idol_of_war()
-                pcall(function()
-                    vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.01)
-                    vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-                end)
-            end
-
-            task.spawn(function()
-                while shared and not shared.is_unloading do
-                    task.wait(IDOL_LOOP_INTERVAL)
-
-                    local enabled = Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value
-                    if not enabled or trinket_bot.gate_in_progress then
-                        trinket_bot.idol_pop_in_progress = false
-                        continue
-                    end
-
-                    local character = plr.Character
-                    local humanoid = character and FindFirstChildOfClass(character, "Humanoid")
-                    local backpack = plr:FindFirstChildOfClass("Backpack")
-                    local idol = backpack and FindFirstChild(backpack, IDOL_ITEM)
-
-                    if humanoid and idol and idol:IsA("Tool") then
-                        trinket_bot.idol_pop_in_progress = true
-
-                        pcall(function()
-                            humanoid:EquipTool(idol)
-                            task.wait(IDOL_USE_DELAY)
-
-                            while shared and not shared.is_unloading do
-                                if not (Toggles.AutoPopIdolOfWar and Toggles.AutoPopIdolOfWar.Value) then
-                                    break
-                                end
-
-                                if trinket_bot.gate_in_progress then
-                                    break
-                                end
-
-                                character = plr.Character
-                                local equipped_idol = character and FindFirstChild(character, IDOL_ITEM)
-                                if not equipped_idol or not equipped_idol:IsA("Tool") then
-                                    break
-                                end
-
-                                click_idol_of_war()
-                                task.wait(IDOL_USE_DELAY)
-                            end
-                        end)
-
-                        trinket_bot.idol_pop_in_progress = false
-                    end
-                end
-
-                trinket_bot.idol_pop_in_progress = false
-            end)
 
             group_trinket_looping:AddSlider("TimeBetweenLooting", {
                 Text = "Time Between Looting",
@@ -22240,26 +20154,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
             })
 
-            group_ui:AddToggle("disable_colored_names", {
-                Text = "Disable Colored Names",
-                Default = cheat_client.config.disable_colored_names,
-                Callback = function(state)
-                    cheat_client.config.disable_colored_names = state
-
-                    if playerLabels then
-                        for label, player in pairs(playerLabels) do
-                            if label and label:IsA("TextLabel") and player then
-                                if state then
-                                    label.TextColor3 = getNaturalPlayerColor and getNaturalPlayerColor(player) or Color3.new(1, 1, 1)
-                                elseif updatePlayerLabel then
-                                    pcall(updatePlayerLabel, player, label)
-                                end
-                            end
-                        end
-                    end
-                end
-            })
-
             group_ui:AddToggle("blatant_mode", {
                 Text = "Blatant Mode",
                 Default = cheat_client.config.blatant_mode,
@@ -23453,6 +21347,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 until originalName and originalName ~= "nil" and originalName ~= ""
                                 original_names[plr] = originalName
                             end
+                            task.wait(0.1)
                             cheat_client:spoof_name(cheat_client.config.custom_name_spoof)
                         end
                         Toggles.streamer_mode:SetValue(true)
@@ -23462,6 +21357,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         if cheat_client.config.char_custom_enabled then
                             if Toggles.char_customization_master then
                                 task.defer(function()
+                                    task.wait(0.5)
                                     if cheat_client.config.char_custom_face ~= "" then
                                         cheat_client.char_custom_enabled.face = true
                                     end
@@ -23481,18 +21377,6 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     end
                                     if cheat_client.config.char_custom_rlface_color ~= default_white then
                                         cheat_client.char_custom_enabled.rlface_color = true
-                                    end
-                                    if cheat_client.config.metal_arm then
-                                        cheat_client.char_custom_enabled.metal_arm = true
-                                        if Toggles.metal_arm and not Toggles.metal_arm.Value then
-                                            Toggles.metal_arm:SetValue(true)
-                                        end
-                                    end
-                                    if cheat_client.config.edict_spoof then
-                                        cheat_client.char_custom_enabled.edict = true
-                                        if Toggles.edict_spoof and not Toggles.edict_spoof.Value then
-                                            Toggles.edict_spoof:SetValue(true)
-                                        end
                                     end
                                     if cheat_client.config.char_custom_clothing_dye ~= default_white then
                                         cheat_client.char_custom_enabled.clothing_dye = true
@@ -25483,46 +23367,26 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         end
 
         do
-            local function instant_reapply_spoof_ui()
-                if shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value then
-                    local spoof_name = cheat_client.config.custom_name_spoof
-                    if not spoof_name or spoof_name == "" then
-                        spoof_name = cheat_client._streamer_spoof_name
-                    end
-                    if spoof_name and spoof_name ~= "" then
-                        cheat_client:spoof_name(spoof_name)
-                    end
-                end
-
-                if cheat_client.config.spoof_days_enabled and cheat_client.config.custom_day_spoof then
-                    cheat_client:spoof_days(cheat_client.config.custom_day_spoof)
-                end
-            end
-
-            -- CharacterAdded is the earliest reliable local respawn signal. No polling delay.
-            utility:Connection(plr.CharacterAdded, function()
-                instant_reapply_spoof_ui()
-            end)
-
-            -- StatGui is often rebuilt after CharacterAdded. Catch the exact UI insertion event
-            -- so the real name/day text is replaced on the same event turn it appears.
-            utility:Connection(plr.PlayerGui.DescendantAdded, function(descendant)
-                -- CharacterName itself is the important frame-1 event. Previously we waited
-                -- until Shadow appeared, which allowed the real name to flash briefly.
-                if descendant.Name == "CharacterName" or descendant.Name == "Shadow" or descendant.Name == "Char" or descendant.Name == "Lives" then
-                    instant_reapply_spoof_ui()
-                end
-            end)
-
             utility:Connection(ws.Live.ChildAdded, function(child)
-                if child:IsA("Model") and child.Name == plr.Name then
-                    instant_reapply_spoof_ui()
-                    if shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value then
-                        -- Keep the non-name streamer UI pieces (leaderboard/settings) refreshed too.
-                        task.spawn(function()
-                            cheat_client:apply_streamer(true)
-                        end)
-                    end
+                if child:IsA("Model") and child.Name == plr.Name and shared and Toggles and Toggles.streamer_mode and Toggles.streamer_mode.Value then
+                    task.spawn(function()
+                        local statGui
+                        repeat
+                            task.wait(0.025)
+                            statGui = FindFirstChild(plr.PlayerGui, "StatGui")
+                        until statGui and FindFirstChild(statGui, "Container") and FindFirstChild(statGui.Container, "CharacterName")
+                        repeat task.wait(0.05) until FindFirstChild(statGui.Container.CharacterName, "Shadow")
+                        if game.PlaceId ~= 14341521240 then
+                            repeat task.wait(0.025) until plr.Character and FindFirstChild(plr.Character, "FakeHumanoid",true)
+                        end
+                        task.wait(0.025)
+                        cheat_client:apply_streamer(true)
+
+                        if cheat_client.config.spoof_days_enabled and cheat_client.config.custom_day_spoof then
+                            task.wait(0.1)
+                            cheat_client:spoof_days(cheat_client.config.custom_day_spoof)
+                        end
+                    end)
                 end
             end)
         end
@@ -25876,32 +23740,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
                 return hasCharacter and Color3.new(1, 1, 1) or Color3.fromRGB(120, 120, 120)
             end
-
-            -- Disable Colored Names only removes WaryaHub's custom recolors.
-            -- Preserve the game's natural MaxEdict gold, but do NOT apply any of
-            -- Better Leaderboard's spawned/unspawned tinting while this toggle is on.
-            getNaturalPlayerColor = function(player)
-                if not player then return Color3.new(1, 1, 1) end
-
-                local hasMaxEdict = player:GetAttribute("MaxEdict") == true
-                local hasLeaderstat = is_khei
-                    and FindFirstChild(player, "leaderstats")
-                    and FindFirstChild(player.leaderstats, "MaxEdict")
-                    and player.leaderstats.MaxEdict.Value == true
-
-                if hasMaxEdict or hasLeaderstat then
-                    return Color3.fromRGB(255, 214, 81)
-                end
-
-                return Color3.new(1, 1, 1)
-            end
             
             updatePlayerLabel = function(player, label)
                 if not player or not label or not label:IsA("TextLabel") then return end
 
-                if shared and Toggles and Toggles.disable_colored_names and Toggles.disable_colored_names.Value then
-                    label.TextColor3 = getNaturalPlayerColor(player)
-                elseif shared and Toggles and Toggles.better_leaderboard and Toggles.better_leaderboard.Value then
+                if shared and Toggles and Toggles.better_leaderboard and Toggles.better_leaderboard.Value then
                     local color = getPlayerColor(player)
                     label.TextColor3 = color
                 else
@@ -28332,73 +26175,29 @@ end
                             -- Optional named artifact spots. These are additive to the normal AreaMarker name.
                             -- Each spot is a true 3D radius; if radii overlap, the closest matching spot wins.
                             local custom_artifact_locations = {
-                                {position = Vector3.new(4182, 819.075, -171), radius = 15, name = "Necro Tree", image = "https://i.imgur.com/ALVesRA.png"},
-                                {position = Vector3.new(4243, 708.044, -64), radius = 50, name = "Necro Church", image = "https://i.imgur.com/peHyqKH.png"},
-                                {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab", image = "https://i.imgur.com/RoXeMAX.png"},
-                                {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab", image = "https://i.imgur.com/Nh2RaNc.png"},
-                                {position = Vector3.new(6577, 1347.994, 474), radius = 266, name = "Sigil", image = "https://i.imgur.com/rhOZ9KQ.png"},
-                                {position = Vector3.new(6093, 1452.131, 159.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6237.284, 1444.483, 79.872), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6390, 1449.131, 78.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6390, 1445.131, 177.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6580, 1448.131, 28.217), radius = 33, name = "Castle Sanc Roof", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer", image = "https://i.imgur.com/YSDvjWE.png"},
-                                {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer", image = "https://i.imgur.com/MP6NgrQ.png"},
-                                {position = Vector3.new(1054.855, 194.368, -3217), radius = 15, name = "Deepforest 2 button place", image = "https://i.imgur.com/SYVwvlF.png"},
-                                {position = Vector3.new(1091, 189.868, -3477), radius = 60, name = "Sunken Pit", image = "https://i.imgur.com/knoDo3t.png"},
-                                {position = Vector3.new(1220, 156.868, -3720), radius = 115, name = "Sunken Right Side", image = "https://i.imgur.com/f6XOC6j.png"},
-                                {position = Vector3.new(1347, 185.868, -3348), radius = 33, name = "Sunken Right Then take another right", image = "https://i.imgur.com/vZOR1ze.png"},
-                                {position = Vector3.new(1007, -456.29, -4327), radius = 33, name = "Crystal Cave", image = "https://i.imgur.com/F6ubeql.png"},
-                                {position = Vector3.new(1166, -254.6, -4566), radius = 50, name = "DSK trainer pathway", image = "https://i.imgur.com/ZvJtjhq.png"},
-                                {position = Vector3.new(-284, 299.594, 42), radius = 7, name = "Top of Sentinel Entrance", image = "https://i.imgur.com/hgT4geY.png"},
-                                {position = Vector3.new(-281.197, 516.939, 1109.766), radius = 80, name = "Left side of Tower on the wall", image = "https://i.imgur.com/qFIuaJZ.png"},
-                                {position = Vector3.new(-1180, 863.189, 2651), radius = 155, name = "Spy Tower", image = "https://i.imgur.com/RMqmuZG.png"},
-                                {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers", image = "https://i.imgur.com/unXqZH3.png"},
-                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House", image = "https://i.imgur.com/ocLZfzr.png"},
-                                {position = Vector3.new(4901.285, 1007.794, 1373.176), radius = 77, name = "Top of Dragonpit", image = "https://i.imgur.com/xb8b8UM.png"},
-                                {position = Vector3.new(-101.77, 3780.89, 140.2), radius = 135, name = "Gacha Room", image = "https://i.imgur.com/MBl5mOy.png"},
-                                {position = Vector3.new(-214.52, 3814.89, 141.2), radius = 83, name = "Skycastle Pillars", image = "https://i.imgur.com/ibYWCuX.png"},
-                                {position = Vector3.new(630.73, 3761.39, -55.3), radius = 122, name = "Room Above Gate ", image = "https://i.imgur.com/4zwi2Zy.png"},
-                                {position = Vector3.new(544.98, 3636.39, -158.3), radius = 77, name = "Room Below Skycastle", image = "https://i.imgur.com/N6WsK3q.png"},
-                                {position = Vector3.new(729.379, 3694.39, -12.575), radius = 77, name = "The Tip of Skycastle", image = "https://i.imgur.com/FC0ZmkR.png"},
-                                {position = Vector3.new(372, 3777.64, -7), radius = 66, name = "Under a Starry Night", image = "https://i.imgur.com/SExE3Qx.png"},
-                                {position = Vector3.new(5790.538, 1431.794, 860.062), radius = 77, name = "Top of Snail", image = "https://i.imgur.com/ps4dA0s.png"},
-                                {position = Vector3.new(4003, 443.794, -1017), radius = 160, name = "Snake Pit", image = "https://i.imgur.com/SlWbHjP.png"},
-                                {position = Vector3.new(3208.855, 124.868, -2453.623), radius = 15, name = "Behind Crates", image = "https://i.imgur.com/2XATSr3.png"},
-                                {position = Vector3.new(3270.355, 207.368, -2535.123), radius = 16, name = "Side of Inn", image = "https://i.imgur.com/e9HDhYp.png"},
-                                {position = Vector3.new(3340.355, 202.368, -2468.123), radius = 20, name = "Inn Beds", image = "https://i.imgur.com/O2ytyLr.png"},
-                                {position = Vector3.new(3060.355, 135.368, -2537.123), radius = 25, name = "Side of Turnip Shop", image = "https://i.imgur.com/pIOF2oI.png"},
-                                {position = Vector3.new(3162.355, 141.368, -2540.123), radius = 44, name = "Top of Weapon Shop", image = "https://i.imgur.com/Cq5V3W6.png"},
-                                {position = Vector3.new(1099.355, 213.368, -2874.123), radius = 30, name = "Ruins #1", image = "https://i.imgur.com/G5S3e2s.png"},
-                                {position = Vector3.new(1143.855, 165.868, -3097.623), radius = 30, name = "Sneaky Corner", image = "https://i.imgur.com/rsGDypV.png"},
-                                {position = Vector3.new(3315.355, 200.368, -2533.123), radius = 35, name = "Flowerlight Innkeeper", image = "https://i.imgur.com/KimrWhI.png"},
-                                {position = Vector3.new(1134.355, 199.368, -3080.123), radius = 25, name = "Ruins #2", image = "https://i.imgur.com/mYymEwv.png"},
-                                {position = Vector3.new(1043.855, 165.868, -3152.123), radius = 65, name = "Graveyard", image = "https://i.imgur.com/cp0Pj6f.png"},
-                                {position = Vector3.new(2516.355, 119.368, -2490.123), radius = 35, name = "Ruins #3", image = "https://i.imgur.com/mYymEwv.png"},
-                                {position = Vector3.new(6512.587, 1403.294, -248.811), radius = 33, name = "2 Statue Mythril Sword Room", image = "https://i.imgur.com/wyN3I58.png"},
-                                {position = Vector3.new(6332.08, 1443.593, 73.39), radius = 33, name = "Castle Sanc Roof (Below Illu Armor) ", image = "https://i.imgur.com/Sty2OTu.png"},
-                                {position = Vector3.new(6336.327, 1476.994, 57.556), radius = 80, name = "Illusionist Armor Room", image = "https://i.imgur.com/mycDgxO.png"},
-                                {position = Vector3.new(6331.28, 1444.994, -225.31), radius = 150, name = "Above Ultra Blacksmith", image = "https://i.imgur.com/oEJEEzJ.png"},
-                                {position = Vector3.new(1618, 455.197, 2960), radius = 111, name = "Behind Big House", image = "https://i.imgur.com/T0sxXLr.png"},
-                                {position = Vector3.new(1520, 435.197, 3015), radius = 100, name = "Hidden Passage/Window Side", image = "https://i.imgur.com/VODYXZc.png"},
-                                {position = Vector3.new(739, 386.2, 2343), radius = 222, name = "Shore 1 Keep", image = "https://imgur.com/a/fUuloME"},
-                                {position = Vector3.new(-135.59, 206.695, 2453.478), radius = 70, name = "Main Hut", image = "https://i.imgur.com/bTB70kM.png"},
-                                {position = Vector3.new(-68.346, 206.1, 2416), radius = 33, name = "Cauldron Hut", image = "https://i.imgur.com/4tTpyGz.png"},
-                            }
-
-                            -- Broad AreaMarker image fallbacks. Only used when no exact/custom location matched.
-                            local general_artifact_area_images = {
-                                {match = "Sigma", image = "https://i.imgur.com/z4hntjV.png", send_data = false},
-                                {match = "the Sky", image = "https://i.imgur.com/p0MPHct.png", send_data = true},
-                                {match = "Snail", image = "https://i.imgur.com/d4w42MY.png", send_data = true},
-                                {match = "Temple of Fire", image = "https://i.imgur.com/DEbxHhg.png", send_data = true},
-                                {match = "Flowerlight", image = "https://i.imgur.com/8KbMjfp.png", send_data = true},
-                                {match = "Deepforest Sanctuary", image = "https://i.imgur.com/GEFKPnX.png", send_data = false},
-                                {match = "Santorini", image = "https://i.imgur.com/7S5VMUN.png", send_data = true},
-                                {match = "Crypt", image = "https://i.imgur.com/A4RmajV.png", send_data = false},
-                                {match = "Vessel", image = "https://i.imgur.com/PKPfHOF.png", send_data = false},
-                                {match = "Ageless", image = "https://i.imgur.com/PKPfHOF.png", send_data = false},
+                                {position = Vector3.new(4182, 819.075, -171), radius = 15, name = "Necro Tree"},
+                                {position = Vector3.new(4243, 708.044, -64), radius = 50, name = "Necro Church"},
+                                {position = Vector3.new(4944.285, 878.294, 1739.5), radius = 40, name = "Side Of Construct Lab"},
+                                {position = Vector3.new(4898, 476.151, 1652), radius = 50, name = "Construct Lab"},
+                                {position = Vector3.new(6577, 1347.994, 474), radius = 200, name = "Sigil"},
+                              	{position = Vector3.new(6093, 1452.131, 159.217), radius = 22, name = "Castle Sanc Roof"},
+								{position = Vector3.new(6237.284, 1444.483, 79.872), radius = 22, name = "Castle Sanc Roof"},
+								{position = Vector3.new(6390, 1449.131, 78.217), radius = 22, name = "Castle Sanc Roof"},
+								{position = Vector3.new(6390, 1445.131, 177.217), radius = 22, name = "Castle Sanc Roof"},
+                                {position = Vector3.new(6480, 1477.768, -251), radius = 15, name = "Castle Sanc Chimney"},
+                                {position = Vector3.new(6836, 1407.793, -152), radius = 120, name = "Ultra Sigil Trainer"},
+                                {position = Vector3.new(3181, 127.535, -2429.01), radius = 6, name = "Druid Trainer"},
+                                {position = Vector3.new(1054.855, 194.368, -3217), radius = 10, name = "Deepforest 2 button place"},
+                                {position = Vector3.new(1091, 189.868, -3477), radius = 60, name = "Sunken Pit"},
+                                {position = Vector3.new(1220, 156.868, -3720), radius = 85, name = "Sunken Right Side"},
+                                {position = Vector3.new(1347, 185.868, -3348), radius = 25, name = "Sunken Right Then take another right"},
+                                {position = Vector3.new(1007, -456.29, -4327), radius = 25, name = "Crystal Cave"},
+                                {position = Vector3.new(1166, -254.6, -4566), radius = 50, name = "DSK trainer pathway"},
+                                {position = Vector3.new(-284, 299.594, 42), radius = 7, name = "Top of Sentinel Entrance"},
+                                {position = Vector3.new(-268, 513.555, 1069.167), radius = 80, name = "Left side of Tower on the wall"},
+                                {position = Vector3.new(-1180, 863.189, 2651), radius = 100, name = "Spy Tower"},
+                                {position = Vector3.new(-2665, 605.555, 116), radius = 33, name = "Sewers"},
+                                {position = Vector3.new(2408.028, 290.709, 904), radius = 40, name = "Tree House"},
                             }
 
                             local function detectArtifactArea()
@@ -28423,7 +26222,7 @@ end
 
                             local function detectCustomArtifactLocation()
                                 local artifactPos = first_object.Position
-                                local closestLocation = nil
+                                local closestName = nil
                                 local closestDistanceSq = math.huge
 
                                 for _, location in ipairs(custom_artifact_locations) do
@@ -28433,49 +26232,15 @@ end
 
                                     if distanceSq <= radiusSq and distanceSq < closestDistanceSq then
                                         closestDistanceSq = distanceSq
-                                        closestLocation = location
+                                        closestName = location.name
                                     end
                                 end
 
-                                return closestLocation
-                            end
-
-                            local function detectGeneralArtifactArea(areaName)
-                                if not areaName or areaName == "None" then return nil end
-
-                                local loweredArea = string.lower(tostring(areaName))
-                                for _, rule in ipairs(general_artifact_area_images) do
-                                    if string.find(loweredArea, string.lower(rule.match), 1, true) then
-                                        return rule
-                                    end
-                                end
-
-                                return nil
+                                return closestName
                             end
 
                             local area = detectArtifactArea()
-                            local custom_location_data = detectCustomArtifactLocation()
-                            local custom_location = custom_location_data and custom_location_data.name or nil
-                            local general_area_data = not custom_location and detectGeneralArtifactArea(area) or nil
-                            local artifact_location_image = custom_location_data and custom_location_data.image
-                                or (general_area_data and general_area_data.image)
-                                or nil
-
-                            -- Exact/custom locations always win. General-area rules are fallback-only.
-                            -- Data collection rules:
-                            --   exact/custom match              -> never send DATA
-                            --   general fallback send_data=false -> do not send DATA
-                            --   general fallback send_data=true  -> send DATA
-                            --   no general fallback              -> send DATA by default
-                            local should_send_data = false
-                            if not custom_location then
-                                if general_area_data then
-                                    should_send_data = general_area_data.send_data == true
-                                else
-                                    should_send_data = true
-                                end
-                            end
-
+                            local custom_location = detectCustomArtifactLocation()
                             local area_text = ""
 
                             if area ~= "None" and custom_location then
@@ -28565,7 +26330,7 @@ end
                             end
 
                             local server_name, server_region = get_server_info()
-                            local webhook_msg = "<@&1547048342226473000>"
+                            local webhook_msg = "<@everyone>"
 
                             local description = string.format("**Artifact%s:** %s\n",
                                 #artifact_names > 1 and "s" or "",
@@ -28586,12 +26351,11 @@ end
                                 artifact_position.Z
                             )
 
-                            -- Keep the player list as the final description section so the embed image renders directly below it.
+                            description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" ) .. "\n\n"
+
                             description = description .. string.format("> Castle Rock: %s\n", get_last_looted("cr"))
                             description = description .. string.format("> Sunken: %s\n", get_last_looted("deepsunken"))
-                            description = description .. string.format("> Temple of Fire: %s\n\n", get_last_looted("temple"))
-
-                            description = description .. "**Players in Server:**\n" .. ( #player_names > 0 and table.concat(player_names, "\n") or "None" )
+                            description = description .. string.format("> Temple of Fire: %s", get_last_looted("temple"))
 
                             local footer_text
                             if cheat_client.config.webhook_show_username ~= false then
@@ -28607,9 +26371,6 @@ end
                                 thumbnail = {
                                     url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                 },
-                                image = artifact_location_image and {
-                                    url = artifact_location_image
-                                } or nil,
                                 footer = {
                                     text = footer_text
                                 },
@@ -28626,9 +26387,9 @@ end
                                 end)
                             end
 
-                            -- Data webhook: controlled per general-area fallback.
-                            -- Exact/custom spots never send DATA. Unmatched areas collect DATA by default.
-                            if should_send_data and cheat_client.config.data_webhook and cheat_client.config.data_webhook ~= "" then
+                            -- Data webhook: only unknown/unmapped artifact spots (no second/custom location).
+                            -- Keep this intentionally minimal so it can be used to collect new location data.
+                            if not custom_location and cheat_client.config.data_webhook and cheat_client.config.data_webhook ~= "" then
                                 local data_embed = {
                                     title = string.format("%s | DATA", artifact_list),
                                     description = string.format(
@@ -28691,9 +26452,6 @@ end
                                     thumbnail = {
                                         url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                     },
-                                    image = artifact_location_image and {
-                                        url = artifact_location_image
-                                    } or nil,
                                     footer = {
                                         text = string.format("Players: %d/23 | Job: %s", player_count, game.JobId)
                                     },
@@ -28725,9 +26483,6 @@ end
                                         thumbnail = {
                                             url = "https://static.wikia.nocookie.net/rogue-lineage/images/d/d8/PhiloRender.png/revision/latest?cb=20251012003300"
                                         },
-                                        image = artifact_location_image and {
-                                            url = artifact_location_image
-                                        } or nil,
                                         footer = {
                                             text = string.format("Players: %d/23 | %s | Job: %s", player_count, plr.Name, game.JobId)
                                         },
@@ -31165,5 +28920,4 @@ end
         warn("[hydroxide.sol] Script error:", err)
     end
 end
-
 

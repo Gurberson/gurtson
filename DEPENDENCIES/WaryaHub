@@ -1890,9 +1890,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             pcall(function()
-                local controller = _G.CooldownVisualizer
-                if controller and controller.Cleanup then
-                    controller.Cleanup()
+                local controller = cheat_client.cooldown_visualizer
+                if controller and controller.cleanup then
+                    controller.cleanup()
                 end
             end)
 
@@ -7549,7 +7549,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
     local connections = {}
 
     local function connect(signal, fn)
-        local c = signal:Connect(fn)
+        local c = utility:Connection(signal, fn)
         table.insert(connections, c)
         return c
     end
@@ -10942,9 +10942,9 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
     -- PUBLIC API
     --------------------------------------------------
 
-    _G.CooldownVisualizer = {
+    cheat_client.cooldown_visualizer = {
 
-        HandleRemote =
+        handle_remote =
             function(event, remotes_folder)
 
                 if not ENABLED then
@@ -10967,7 +10967,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
             end,
 
-        SetEnabled =
+        set_enabled =
             function(enabled)
 
                 local success, err =
@@ -10987,7 +10987,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
             end,
 
-        Cleanup =
+        cleanup =
             function()
 
                 local success, err =
@@ -11751,9 +11751,9 @@ end
                 Callback = function(state)
                     cheat_client.config.cooldown_visualizer = state
 
-                    local controller = _G.CooldownVisualizer
-                    if controller and controller.SetEnabled then
-                        controller.SetEnabled(state)
+                    local controller = cheat_client.cooldown_visualizer
+                    if controller and controller.set_enabled then
+                        controller.set_enabled(state)
                     end
                 end
             })
@@ -25916,9 +25916,11 @@ end
                         and FindFirstChild(char, "CharacterHandler")
                         and FindFirstChild(char.CharacterHandler, "Remotes")
 
-                    local cooldown_controller = _G.CooldownVisualizer
-                    if cooldown_controller and cooldown_controller.HandleRemote then
-                        cooldown_controller.HandleRemote(Event, remotes_folder)
+                    -- Cooldown Visualizer uses the same direct hub integration
+                    -- as the working reference version.
+                    local cooldown_controller = cheat_client.cooldown_visualizer
+                    if cooldown_controller and cooldown_controller.handle_remote then
+                        cooldown_controller.handle_remote(Event, remotes_folder)
                     end
 
                     if shared and not mana_remote and remotes_folder and Event.Parent == remotes_folder then

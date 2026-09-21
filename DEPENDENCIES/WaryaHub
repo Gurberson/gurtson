@@ -458,6 +458,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             hold_block = false,
             hold_block_delay = 0,
             no_stun = false,
+            no_blind_in_combat = false,
             gelidus_boost = false,
             gelidus_boost_value = 103,
             hoppa_boost = false,
@@ -7503,6 +7504,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 --// Wrathful Leap
 --// Spellblade
 --// Great Cyclone
+--// Wing Soar
 --// Abyssal Scream
 --// Rift Dive
 --// Gelidus
@@ -7607,6 +7609,43 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             "122649765707672",
             0.2,
             11.75
+        },
+
+        --------------------------------------------------
+        -- WING SOAR
+        --
+        -- 1. On LeftClick, watch for a newly-added BodyVelocity
+        --    for up to 0.300s. It must have:
+        --      Velocity.Y = 175-185
+        --      MaxForce.Y = inf
+        -- 2. After confirmed activation, wait up to 4s for a
+        --    newly-added recast BodyVelocity with Velocity.Y = 58-63
+        --    and the same infinite Y MaxForce.
+        -- 3. If the first recast happens, open one more 4s window
+        --    for the second recast.
+        -- 4. If either 4s recast window expires before the next
+        --    recast appears, start a 10.3s cooldown. If both recasts
+        --    are confirmed, start the normal 14.5s cooldown immediately.
+        --------------------------------------------------
+
+        {
+            name = "Wing Soar",
+
+            confirmation_window = 0.300,
+            cooldown_time = 14.5,
+            incomplete_recast_cooldown = 10.3,
+
+            special = "wing_soar_velocity_recasts",
+
+            initial_velocity_y_min = 175,
+            initial_velocity_y_max = 185,
+
+            recast_velocity_y_min = 58,
+            recast_velocity_y_max = 63,
+
+            required_maxforce_y = math.huge,
+            recast_window = 4,
+            max_recasts = 2,
         },
 
         {"Deflecting Spin", "3540054806", 0.164, 15},
@@ -7783,6 +7822,27 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                 release_sound_name =
                     row.release_sound_name,
 
+                initial_velocity_y_min =
+                    tonumber(row.initial_velocity_y_min),
+
+                initial_velocity_y_max =
+                    tonumber(row.initial_velocity_y_max),
+
+                recast_velocity_y_min =
+                    tonumber(row.recast_velocity_y_min),
+
+                recast_velocity_y_max =
+                    tonumber(row.recast_velocity_y_max),
+
+                required_maxforce_y =
+                    row.required_maxforce_y,
+
+                recast_window =
+                    tonumber(row.recast_window),
+
+                max_recasts =
+                    tonumber(row.max_recasts),
+
                 block_retrigger_while_special =
                     row.block_retrigger_while_special ~= false,
             }
@@ -7870,6 +7930,14 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             great_cyclone_sound = nil,
             great_cyclone_sound_played = false,
             great_cyclone_sound_connections = {},
+
+            --------------------------------------------------
+            -- WING SOAR
+            --------------------------------------------------
+
+            wing_soar_connection = nil,
+            wing_soar_candidates = nil,
+            wing_soar_recasts = 0,
 
             --------------------------------------------------
             -- SPECIAL ANIMATION LOCK
@@ -8979,6 +9047,21 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         state.great_cyclone_sound_played = false
 
         --------------------------------------------------
+        -- WING SOAR
+        --------------------------------------------------
+
+        if state.wing_soar_connection then
+            pcall(function()
+                state.wing_soar_connection:Disconnect()
+            end)
+
+            state.wing_soar_connection = nil
+        end
+
+        state.wing_soar_candidates = nil
+        state.wing_soar_recasts = 0
+
+        --------------------------------------------------
         -- EMERGE
         --------------------------------------------------
 
@@ -9975,6 +10058,397 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
     end
 
     --------------------------------------------------
+    -- WING SOAR HELPERS
+    --------------------------------------------------
+
+    local function disconnect_wing_soar_connection(state)
+
+        if state.wing_soar_connection then
+
+            pcall(function()
+                state.wing_soar_connection:Disconnect()
+            end)
+
+            state.wing_soar_connection = nil
+        end
+
+        state.wing_soar_candidates = nil
+    end
+
+    local function wing_soar_velocity_matches(
+        profile,
+        body_velocity,
+        y_min,
+        y_max
+    )
+
+        if not body_velocity
+            or not body_velocity:IsA("BodyVelocity")
+        then
+            return false
+        end
+
+        local success,
+            velocity,
+            max_force =
+            pcall(function()
+                return body_velocity.Velocity,
+                    body_velocity.MaxForce
+            end)
+
+        if not success
+            or not velocity
+            or not max_force
+        then
+            return false
+        end
+
+        --------------------------------------------------
+        -- SCREENSHOT / LOGGER SIGNATURE:
+        -- MaxForce.Y must be effectively infinite.
+        --------------------------------------------------
+
+        local required_maxforce_y =
+            profile.required_maxforce_y
+            or math.huge
+
+        if required_maxforce_y == math.huge then
+
+            if max_force.Y ~= math.huge then
+                return false
+            end
+
+        elseif max_force.Y < required_maxforce_y then
+            return false
+        end
+
+        return velocity.Y >= y_min
+            and velocity.Y <= y_max
+    end
+
+    local function find_wing_soar_candidate(
+        profile,
+        candidates,
+        added_after,
+        added_before,
+        y_min,
+        y_max
+    )
+
+        if not candidates then
+            return nil
+        end
+
+        for object, added_at
+            in pairs(candidates)
+        do
+
+            if added_at >= added_after
+                and added_at <= added_before
+                and wing_soar_velocity_matches(
+                    profile,
+                    object,
+                    y_min,
+                    y_max
+                )
+            then
+                return object
+            end
+        end
+
+        return nil
+    end
+
+    local function finish_wing_soar_cooldown(
+        profile,
+        state,
+        token,
+        duration_override
+    )
+
+        if state.special_token ~= token
+            or not state.special_active
+        then
+            return
+        end
+
+        local button =
+            state.special_button
+
+        state.special_token += 1
+
+        state.special_active = false
+        state.special_started_at = nil
+        state.special_button = nil
+
+        state.wing_soar_recasts = 0
+        state.move_in_progress = false
+
+        disconnect_wing_soar_connection(state)
+
+        start_cooldown(
+            profile,
+            button,
+            duration_override or profile.cooldown_time or 14.5
+        )
+    end
+
+    local function start_wing_soar_recast_resolution(
+        profile,
+        state,
+        cached_button,
+        character
+    )
+
+        state.special_token += 1
+
+        local token =
+            state.special_token
+
+        state.special_active = true
+        state.special_started_at = os.clock()
+        state.special_button = cached_button
+
+        state.wing_soar_recasts = 0
+        state.move_in_progress = false
+
+        local candidates =
+            state.wing_soar_candidates
+
+        local recast_window =
+            profile.recast_window
+            or 4
+
+        local max_recasts =
+            profile.max_recasts
+            or 2
+
+        task.spawn(function()
+
+            for recast_index = 1, max_recasts do
+
+                if state.special_token ~= token
+                    or not state.special_active
+                    or not ENABLED
+                    or plr.Character ~= character
+                then
+                    return
+                end
+
+                local window_started_at =
+                    os.clock()
+
+                local window_ends_at =
+                    window_started_at
+                    + recast_window
+
+                local matched_velocity = nil
+
+                --------------------------------------------------
+                -- EACH RECAST GETS ITS OWN 4 SECOND WINDOW.
+                --------------------------------------------------
+
+                repeat
+
+                    if state.special_token ~= token
+                        or not state.special_active
+                        or not ENABLED
+                        or plr.Character ~= character
+                    then
+                        return
+                    end
+
+                    matched_velocity =
+                        find_wing_soar_candidate(
+                            profile,
+                            candidates,
+                            window_started_at,
+                            window_ends_at,
+                            profile.recast_velocity_y_min or 58,
+                            profile.recast_velocity_y_max or 63
+                        )
+
+                    if matched_velocity then
+                        break
+                    end
+
+                    task.wait()
+
+                until os.clock() > window_ends_at
+
+                --------------------------------------------------
+                -- NO RECAST IN THIS 4s WINDOW -> CHAIN ENDS.
+                -- This also covers using Wing Soar with zero
+                -- recasts, or using only the first recast.
+                --------------------------------------------------
+
+                if not matched_velocity then
+
+                    finish_wing_soar_cooldown(
+                        profile,
+                        state,
+                        token,
+                        profile.incomplete_recast_cooldown or 10.3
+                    )
+
+                    return
+                end
+
+                candidates[matched_velocity] = nil
+                state.wing_soar_recasts = recast_index
+
+                --------------------------------------------------
+                -- SECOND RECAST CONFIRMED -> START 14.5s CD NOW.
+                -- A timeout in either 4s window uses 10.3s instead.
+                --------------------------------------------------
+
+                if recast_index >= max_recasts then
+
+                    finish_wing_soar_cooldown(
+                        profile,
+                        state,
+                        token
+                    )
+
+                    return
+                end
+            end
+        end)
+    end
+
+    local function start_wing_soar_initial_scan(
+        profile,
+        state,
+        token
+    )
+
+        local character =
+            plr.Character
+
+        if not character then
+            return
+        end
+
+        disconnect_wing_soar_connection(state)
+
+        local candidates = {}
+
+        state.wing_soar_candidates =
+            candidates
+
+        state.move_in_progress = true
+
+        --------------------------------------------------
+        -- IMPORTANT: THIS CONNECTION IS CREATED BEFORE THE
+        -- ORIGINAL LEFTCLICK FIRESERVER CALL CONTINUES, SO WE
+        -- ONLY CAPTURE BODYVELOCITIES ADDED BY/AFTER THE USE.
+        --------------------------------------------------
+
+        state.wing_soar_connection =
+            character.DescendantAdded:Connect(function(object)
+
+                if object:IsA("BodyVelocity") then
+                    candidates[object] = os.clock()
+                end
+
+            end)
+
+        local activation_at =
+            state.pending_at
+            or os.clock()
+
+        local confirmation_window =
+            profile.confirmation_window
+            or 0.300
+
+        local confirmation_ends_at =
+            activation_at
+            + confirmation_window
+
+        task.spawn(function()
+
+            local matched_velocity = nil
+
+            repeat
+
+                if state.pending_token ~= token
+                    or not ENABLED
+                    or plr.Character ~= character
+                then
+                    return
+                end
+
+                matched_velocity =
+                    find_wing_soar_candidate(
+                        profile,
+                        candidates,
+                        activation_at,
+                        confirmation_ends_at,
+                        profile.initial_velocity_y_min or 175,
+                        profile.initial_velocity_y_max or 185
+                    )
+
+                if matched_velocity then
+                    break
+                end
+
+                task.wait()
+
+            until os.clock() > confirmation_ends_at
+
+            --------------------------------------------------
+            -- INITIAL 175-185 Y VELOCITY NEVER APPEARED.
+            -- DO NOT SHOW A FALSE COOLDOWN.
+            --------------------------------------------------
+
+            if not matched_velocity then
+
+                if state.pending_token == token then
+
+                    state.pending_at = nil
+                    state.pending_button = nil
+
+                    state.pending_required_instance_seen = false
+                    state.pending_required_instance_2_seen = false
+                    state.pending_animation_seen = false
+
+                    state.move_in_progress = false
+
+                    disconnect_wing_soar_connection(state)
+                end
+
+                return
+            end
+
+            local cached_button =
+                state.pending_button
+
+            candidates[matched_velocity] = nil
+
+            --------------------------------------------------
+            -- INITIAL USE CONFIRMED. INVALIDATE LEFTCLICK
+            -- PENDING, THEN BEGIN THE TWO RECAST WINDOWS.
+            --------------------------------------------------
+
+            state.pending_at = nil
+            state.pending_button = nil
+
+            state.pending_required_instance_seen = false
+            state.pending_required_instance_2_seen = false
+            state.pending_animation_seen = false
+
+            state.pending_token += 1
+
+            start_wing_soar_recast_resolution(
+                profile,
+                state,
+                cached_button,
+                character
+            )
+        end)
+    end
+
+    --------------------------------------------------
     -- INSTANCE + ANIMATION CONFIRMATION
     --------------------------------------------------
 
@@ -10804,6 +11278,21 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             false
 
         --------------------------------------------------
+        -- WING SOAR VELOCITY CONFIRMATION
+        --------------------------------------------------
+
+        if profile.special == "wing_soar_velocity_recasts" then
+
+            start_wing_soar_initial_scan(
+                profile,
+                state,
+                token
+            )
+
+            return
+        end
+
+        --------------------------------------------------
         -- RIFT DIVE SPEEDLOCK BASELINE
         --------------------------------------------------
 
@@ -11103,6 +11592,64 @@ end
                 Default = cheat_client.config.no_stun
             })
 
+            local no_blind_in_combat_enabled_connection = nil
+            local no_blind_in_combat_child_connection = nil
+
+            local function disconnect_no_blind_in_combat_enabled()
+                if no_blind_in_combat_enabled_connection then
+                    utility:RemoveConnection(no_blind_in_combat_enabled_connection)
+                    no_blind_in_combat_enabled_connection = nil
+                end
+            end
+
+            local function attach_no_blind_in_combat()
+                disconnect_no_blind_in_combat_enabled()
+                if not cheat_client.config.no_blind_in_combat then return end
+
+                local bag_blind = lit:FindFirstChild("BagBlind")
+                if not bag_blind then return end
+
+                local function force_disabled()
+                    if cheat_client.config.no_blind_in_combat and bag_blind.Parent and bag_blind.Enabled then
+                        bag_blind.Enabled = false
+                    end
+                end
+
+                force_disabled()
+                no_blind_in_combat_enabled_connection = utility:Connection(
+                    bag_blind:GetPropertyChangedSignal("Enabled"),
+                    force_disabled
+                )
+            end
+
+            local function start_no_blind_in_combat()
+                attach_no_blind_in_combat()
+
+                if no_blind_in_combat_child_connection then
+                    utility:RemoveConnection(no_blind_in_combat_child_connection)
+                end
+
+                no_blind_in_combat_child_connection = utility:Connection(lit.ChildAdded, function(obj)
+                    if obj.Name == "BagBlind" then
+                        task.defer(attach_no_blind_in_combat)
+                    end
+                end)
+            end
+
+            local function stop_no_blind_in_combat()
+                disconnect_no_blind_in_combat_enabled()
+
+                if no_blind_in_combat_child_connection then
+                    utility:RemoveConnection(no_blind_in_combat_child_connection)
+                    no_blind_in_combat_child_connection = nil
+                end
+            end
+
+            group_combat_utils:AddToggle("NoBlindInCombat", {
+                Text = "No Blind in Combat",
+                Default = cheat_client.config.no_blind_in_combat
+            })
+
             group_combat_utils:AddToggle("AntiHystericus", {
                 Text = "No Confusion",
                 Default = cheat_client.config.anti_confusion
@@ -11303,6 +11850,21 @@ end
                 local value = Toggles.NoStun.Value
                 cheat_client.config.no_stun = value
             end)
+
+            Toggles.NoBlindInCombat:OnChanged(function()
+                local value = Toggles.NoBlindInCombat.Value
+                cheat_client.config.no_blind_in_combat = value
+
+                if value then
+                    start_no_blind_in_combat()
+                else
+                    stop_no_blind_in_combat()
+                end
+            end)
+
+            if cheat_client.config.no_blind_in_combat then
+                start_no_blind_in_combat()
+            end
 
             Toggles.AntiHystericus:OnChanged(function()
                 local value = Toggles.AntiHystericus.Value

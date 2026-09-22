@@ -461,6 +461,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             no_blind_in_combat = false,
             gelidus_boost = false,
             gelidus_boost_value = 103,
+            blacksmith_m2_serum = false,
+            grapple_velocity = false,
+            grapple_velocity_multiplier = 1.0,
+            shadow_rush_velocity = false,
+            shadow_rush_velocity_multiplier = 1.0,
             hoppa_boost = false,
             foot_serum = false,
             foot_serum_value = 2.8,
@@ -987,6 +992,480 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         connections = {},
         window_active = true,
     }
+
+    -- Blacksmith M2 Serum
+    -- The game repeatedly rewrites ForwardVelocity throughout the lunge, so this
+    -- intercepts those writes and stretches the complete horizontal velocity curve.
+    -- It intentionally keeps the original P and MaxForce unchanged.
+    do
+        local BLACKSMITH_M2_MULTIPLIER = 1.53
+        local BLACKSMITH_M2_MAXFORCE = Vector3.new(80000, 0, 80000)
+        local BLACKSMITH_M2_FORCE_TOLERANCE = 2
+        local BLACKSMITH_M2_P = 1250
+        local BLACKSMITH_M2_P_TOLERANCE = 10
+
+        -- Per-mover state. We only stretch the real lunge phase, then permanently
+        -- stop touching that mover once it enters its low-speed tail/end phase.
+        local blacksmith_m2_latched = setmetatable({}, {__mode = "k"})
+        local BLACKSMITH_M2_MAIN_START_SPEED = 60
+        local BLACKSMITH_M2_TAIL_CUTOFF_SPEED = 30
+
+        local function blacksmith_m2_force_matches(value)
+            return typeof(value) == "Vector3"
+                and math.abs(value.X - BLACKSMITH_M2_MAXFORCE.X) <= BLACKSMITH_M2_FORCE_TOLERANCE
+                and math.abs(value.Y - BLACKSMITH_M2_MAXFORCE.Y) <= BLACKSMITH_M2_FORCE_TOLERANCE
+                and math.abs(value.Z - BLACKSMITH_M2_MAXFORCE.Z) <= BLACKSMITH_M2_FORCE_TOLERANCE
+        end
+
+        local function blacksmith_m2_p_matches(value)
+            return type(value) == "number"
+                and math.abs(value - BLACKSMITH_M2_P) <= BLACKSMITH_M2_P_TOLERANCE
+        end
+
+        local BLACKSMITH_M2_FEEDBACK_BIAS = 0.25
+        local BLACKSMITH_M2_MAX_UNSCALE_PASSES = 6
+
+        -- The game's curve can occasionally calculate its next write from the
+        -- BodyVelocity value we already boosted. If we blindly multiply that write
+        -- again, 1.08x can become 1.08^2, 1.08^3, etc. and cause a huge launch.
+        --
+        -- Compare the incoming horizontal velocity against the last ORIGINAL/raw
+        -- curve value. If removing one or more 1.08x layers makes it closer to that
+        -- raw curve, strip those layers first. The final 1.08x is then applied once.
+        local function blacksmith_m2_remove_compound_layers(horizontal, state)
+            if not state or not state.last_raw_horizontal then
+                return horizontal
+            end
+
+            local candidate = horizontal
+            local last_raw = state.last_raw_horizontal
+
+            for _ = 1, BLACKSMITH_M2_MAX_UNSCALE_PASSES do
+                local unscaled = candidate / BLACKSMITH_M2_MULTIPLIER
+                local candidate_distance = (candidate - last_raw).Magnitude
+                local unscaled_distance = (unscaled - last_raw).Magnitude
+
+                if unscaled_distance + BLACKSMITH_M2_FEEDBACK_BIAS < candidate_distance then
+                    candidate = unscaled
+                else
+                    break
+                end
+            end
+
+            return candidate
+        end
+
+        local function blacksmith_m2_stretch_velocity(value, state)
+            if typeof(value) ~= "Vector3" then
+                return value
+            end
+
+            local incoming_horizontal = Vector3.new(value.X, 0, value.Z)
+            if incoming_horizontal.Magnitude <= 0.01 or not state or state.tail_started then
+                return value
+            end
+
+            -- Normalize away any copies of our own previous 1.08x boost before
+            -- doing curve/tail checks. This makes the operation effectively
+            -- idempotent: feeding a boosted value back in does not boost it again.
+            local horizontal = blacksmith_m2_remove_compound_layers(incoming_horizontal, state)
+            local speed = horizontal.Magnitude
+
+            -- Do not touch any small pre-lunge/setup writes. The real Blacksmith
+            -- lunge is the high-speed phase (~83 studs/s from our debug).
+            if not state.main_seen then
+                if speed < BLACKSMITH_M2_MAIN_START_SPEED then
+                    return value
+                end
+                state.main_seen = true
+            end
+
+            -- Once the ORIGINAL/raw curve drops into its ~23/~16 studs/s tail,
+            -- stop modifying the mover for the rest of its lifetime. This prevents
+            -- the rare little shove that could happen right at the end of the lunge.
+            if speed < BLACKSMITH_M2_TAIL_CUTOFF_SPEED then
+                state.tail_started = true
+                return value
+            end
+
+            local scaled = horizontal * BLACKSMITH_M2_MULTIPLIER
+
+            -- Save both sides of this write so the next curve update can tell
+            -- whether it is raw game velocity or feedback from our boosted value.
+            state.last_raw_horizontal = horizontal
+            state.last_scaled_horizontal = scaled
+
+            return Vector3.new(scaled.X, value.Y, scaled.Z)
+        end
+
+        old_newindex = hookmetamethod(game, "__newindex", newcclosure(function(self, key, value)
+            if not checkcaller()
+                and not (shared and shared.is_unloading)
+                and cheat_client
+                and cheat_client.config
+                and cheat_client.config.blacksmith_m2_serum
+                and typeof(self) == "Instance"
+                and self:IsA("BodyVelocity")
+                and self.Name == "ForwardVelocity"
+            then
+                local future_force = (key == "MaxForce") and value or self.MaxForce
+                local future_p = (key == "P") and value or self.P
+
+                -- Latch as soon as this ForwardVelocity has the Blacksmith M2 signature.
+                if not blacksmith_m2_latched[self]
+                    and blacksmith_m2_force_matches(future_force)
+                    and blacksmith_m2_p_matches(future_p)
+                then
+                    local state = {
+                        main_seen = false,
+                        tail_started = false,
+                    }
+                    blacksmith_m2_latched[self] = state
+
+                    if key == "Velocity" and typeof(value) == "Vector3" then
+                        value = blacksmith_m2_stretch_velocity(value, state)
+                    end
+
+                    local result = old_newindex(self, key, value)
+
+                    -- If Velocity was assigned before MaxForce/P completed the signature,
+                    -- inspect the current value once at latch time.
+                    if key ~= "Velocity" then
+                        local current_velocity = self.Velocity
+                        if typeof(current_velocity) == "Vector3" then
+                            local stretched = blacksmith_m2_stretch_velocity(current_velocity, state)
+                            if stretched ~= current_velocity then
+                                old_newindex(self, "Velocity", stretched)
+                            end
+                        end
+                    end
+
+                    return result
+                end
+
+                local state = blacksmith_m2_latched[self]
+
+                -- Stretch only the actual lunge portion. Once the low-speed tail
+                -- begins, leave every remaining write completely untouched.
+                if state
+                    and key == "Velocity"
+                    and typeof(value) == "Vector3"
+                then
+                    value = blacksmith_m2_stretch_velocity(value, state)
+                end
+            end
+
+            return old_newindex(self, key, value)
+        end))
+    end
+
+    -- Grapple Velocity
+    -- GrappleVelocity is normally replicated/parented with its properties already set,
+    -- so unlike Blacksmith M2 we do not rely on __newindex seeing the game's writes.
+    -- Instead, watch the local character for newly-added BodyVelocity instances and
+    -- apply the selected multiplier once when the grapple signature becomes valid.
+    do
+        local GRAPPLE_VELOCITY_MAXFORCE = Vector3.new(1000000, 1000000, 1000000)
+        local GRAPPLE_VELOCITY_FORCE_TOLERANCE = 2
+        local GRAPPLE_VELOCITY_MIN_Y = 53
+        local GRAPPLE_VELOCITY_INIT_FRAMES = 15
+
+        -- Weak keys make this one-shot per BodyVelocity and prevent accidental
+        -- multiplication of our own already-multiplied value.
+        local grapple_velocity_applied = setmetatable({}, {__mode = "k"})
+        local grapple_velocity_character_connections = setmetatable({}, {__mode = "k"})
+
+        local function grapple_velocity_force_matches(value)
+            return typeof(value) == "Vector3"
+                and math.abs(value.X - GRAPPLE_VELOCITY_MAXFORCE.X) <= GRAPPLE_VELOCITY_FORCE_TOLERANCE
+                and math.abs(value.Y - GRAPPLE_VELOCITY_MAXFORCE.Y) <= GRAPPLE_VELOCITY_FORCE_TOLERANCE
+                and math.abs(value.Z - GRAPPLE_VELOCITY_MAXFORCE.Z) <= GRAPPLE_VELOCITY_FORCE_TOLERANCE
+        end
+
+        local function grapple_velocity_get_multiplier()
+            local multiplier = tonumber(cheat_client.config.grapple_velocity_multiplier) or 1.0
+            return math.clamp(multiplier, 1.0, 2.5)
+        end
+
+        local function grapple_velocity_try_apply(mover)
+            if grapple_velocity_applied[mover]
+                or not cheat_client
+                or not cheat_client.config
+                or not cheat_client.config.grapple_velocity
+                or not mover
+                or not mover.Parent
+                or not mover:IsA("BodyVelocity")
+                or mover.Name ~= "GrappleVelocity"
+                or not grapple_velocity_force_matches(mover.MaxForce)
+            then
+                return false
+            end
+
+            local raw_velocity = mover.Velocity
+            if typeof(raw_velocity) ~= "Vector3" or raw_velocity.Y <= GRAPPLE_VELOCITY_MIN_Y then
+                return false
+            end
+
+            -- Mark before writing so even if our assignment causes another signal/event,
+            -- this exact mover can never be multiplied twice.
+            grapple_velocity_applied[mover] = true
+
+            local multiplier = grapple_velocity_get_multiplier()
+            if multiplier > 1.0001 then
+                mover.Velocity = raw_velocity * multiplier
+            end
+
+            return true
+        end
+
+        local function grapple_velocity_watch_mover(instance)
+            if not instance or not instance:IsA("BodyVelocity") then
+                return
+            end
+
+            -- DescendantAdded can fire before Name/MaxForce/Velocity finish replicating.
+            -- Retry for a few frames so a mover that arrives as a generic BodyVelocity
+            -- still gets caught once it becomes GrappleVelocity with the proper values.
+            task.spawn(function()
+                for _ = 1, GRAPPLE_VELOCITY_INIT_FRAMES do
+                    if not instance.Parent or (shared and shared.is_unloading) then
+                        return
+                    end
+
+                    if grapple_velocity_try_apply(instance) then
+                        return
+                    end
+
+                    rs.Heartbeat:Wait()
+                end
+            end)
+        end
+
+        local function grapple_velocity_watch_character(character)
+            if not character or grapple_velocity_character_connections[character] then
+                return
+            end
+
+            -- Catch a GrappleVelocity that already exists when this watcher attaches.
+            for _, descendant in ipairs(character:GetDescendants()) do
+                grapple_velocity_watch_mover(descendant)
+            end
+
+            local connection = character.DescendantAdded:Connect(grapple_velocity_watch_mover)
+            grapple_velocity_character_connections[character] = connection
+
+            if shared and shared.connections then
+                shared.connections[#shared.connections + 1] = connection
+            end
+        end
+
+        if plr.Character then
+            grapple_velocity_watch_character(plr.Character)
+        end
+
+        local grapple_character_added = plr.CharacterAdded:Connect(grapple_velocity_watch_character)
+        if shared and shared.connections then
+            shared.connections[#shared.connections + 1] = grapple_character_added
+        end
+    end
+
+    -- Shadow Rush Velocity
+    -- Only arms when the actual "Shadowrush" tool is used through the character's
+    -- LeftClick remote. After that input, matching BodyVelocity instances are accepted
+    -- for up to 0.4 seconds. This mirrors the skill-use detection path used by the
+    -- Cooldown Visualizer instead of boosting every generic BodyVelocity signature.
+    do
+        local SHADOW_RUSH_TOOL_NAME = "Shadowrush"
+        local SHADOW_RUSH_INPUT_WINDOW = 0.4
+        local SHADOW_RUSH_MAXFORCE = Vector3.new(80000, 0, 80000)
+        local SHADOW_RUSH_FORCE_TOLERANCE = 2
+        local SHADOW_RUSH_ZERO_TOLERANCE = 0.01
+        local SHADOW_RUSH_P = 1250
+        local SHADOW_RUSH_P_TOLERANCE = 10
+
+        -- One application per mover prevents the multiplier from compounding itself.
+        local shadow_rush_velocity_applied = setmetatable({}, {__mode = "k"})
+        local shadow_rush_velocity_character_connections = setmetatable({}, {__mode = "k"})
+        local shadow_rush_activation_token = 0
+        local shadow_rush_active_until = 0
+
+        local function shadow_rush_force_matches(value)
+            return typeof(value) == "Vector3"
+                and math.abs(value.X - SHADOW_RUSH_MAXFORCE.X) <= SHADOW_RUSH_FORCE_TOLERANCE
+                and math.abs(value.Y - SHADOW_RUSH_MAXFORCE.Y) <= SHADOW_RUSH_ZERO_TOLERANCE
+                and math.abs(value.Z - SHADOW_RUSH_MAXFORCE.Z) <= SHADOW_RUSH_FORCE_TOLERANCE
+        end
+
+        local function shadow_rush_p_matches(value)
+            return type(value) == "number"
+                and math.abs(value - SHADOW_RUSH_P) <= SHADOW_RUSH_P_TOLERANCE
+        end
+
+        local function shadow_rush_velocity_get_multiplier()
+            local multiplier = tonumber(cheat_client.config.shadow_rush_velocity_multiplier) or 1.0
+            return math.clamp(multiplier, 1.0, 2.5)
+        end
+
+        local function shadow_rush_is_armed()
+            return os.clock() <= shadow_rush_active_until
+        end
+
+        local function shadow_rush_is_equipped()
+            local character = plr.Character
+            if not character then
+                return false
+            end
+
+            for _, object in ipairs(character:GetChildren()) do
+                if object:IsA("Tool") and object.Name == SHADOW_RUSH_TOOL_NAME then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local function shadow_rush_velocity_try_apply(mover)
+            if not shadow_rush_is_armed()
+                or shadow_rush_velocity_applied[mover]
+                or not cheat_client
+                or not cheat_client.config
+                or not cheat_client.config.shadow_rush_velocity
+                or not mover
+                or not mover.Parent
+                or not mover:IsA("BodyVelocity")
+                or mover.Name ~= "BodyVelocity"
+                or not shadow_rush_force_matches(mover.MaxForce)
+                or not shadow_rush_p_matches(mover.P)
+            then
+                return false
+            end
+
+            local raw_velocity = mover.Velocity
+            if typeof(raw_velocity) ~= "Vector3"
+                or math.abs(raw_velocity.Y) > SHADOW_RUSH_ZERO_TOLERANCE
+            then
+                return false
+            end
+
+            -- Mark before writing so this exact BodyVelocity cannot be multiplied twice.
+            shadow_rush_velocity_applied[mover] = true
+
+            local multiplier = shadow_rush_velocity_get_multiplier()
+            if multiplier > 1.0001 then
+                mover.Velocity = raw_velocity * multiplier
+            end
+
+            -- Shadowrush only needs one matching mover for this activation.
+            shadow_rush_active_until = 0
+            return true
+        end
+
+        local function shadow_rush_velocity_watch_mover(instance)
+            if not instance or not instance:IsA("BodyVelocity") then
+                return
+            end
+
+            task.spawn(function()
+                -- A BodyVelocity can be parented before MaxForce/P/Velocity are initialized.
+                -- Keep checking it only while the current 0.4s Shadowrush window is alive.
+                while instance.Parent
+                    and not (shared and shared.is_unloading)
+                    and shadow_rush_is_armed()
+                do
+                    if shadow_rush_velocity_try_apply(instance) then
+                        return
+                    end
+
+                    rs.Heartbeat:Wait()
+                end
+            end)
+        end
+
+        local function shadow_rush_scan_current_movers()
+            local character = plr.Character
+            if not character then
+                return false
+            end
+
+            for _, descendant in ipairs(character:GetDescendants()) do
+                if descendant:IsA("BodyVelocity")
+                    and shadow_rush_velocity_try_apply(descendant)
+                then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local function shadow_rush_arm_from_skill_use(event, remotes_folder)
+            if not cheat_client
+                or not cheat_client.config
+                or not cheat_client.config.shadow_rush_velocity
+                or not remotes_folder
+                or not event
+                or event.Parent ~= remotes_folder
+                or event.Name ~= "LeftClick"
+                or not shadow_rush_is_equipped()
+            then
+                return
+            end
+
+            shadow_rush_activation_token += 1
+            local token = shadow_rush_activation_token
+            shadow_rush_active_until = os.clock() + SHADOW_RUSH_INPUT_WINDOW
+
+            -- Scan every frame for the same 0.4s window. This catches the mover whether
+            -- it is inserted after LeftClick or was inserted just before the watcher fires.
+            task.spawn(function()
+                while token == shadow_rush_activation_token
+                    and shadow_rush_is_armed()
+                    and not (shared and shared.is_unloading)
+                do
+                    if shadow_rush_scan_current_movers() then
+                        return
+                    end
+
+                    rs.Heartbeat:Wait()
+                end
+
+                if token == shadow_rush_activation_token then
+                    shadow_rush_active_until = 0
+                end
+            end)
+        end
+
+        local function shadow_rush_velocity_watch_character(character)
+            if not character or shadow_rush_velocity_character_connections[character] then
+                return
+            end
+
+            local connection = character.DescendantAdded:Connect(shadow_rush_velocity_watch_mover)
+            shadow_rush_velocity_character_connections[character] = connection
+
+            if shared and shared.connections then
+                shared.connections[#shared.connections + 1] = connection
+            end
+        end
+
+        -- Public bridge used by the hub's existing FireServer hook. Keeping the input
+        -- detection on that one hook avoids stacking another FireServer hook.
+        cheat_client.shadow_rush_velocity_handle_remote = shadow_rush_arm_from_skill_use
+
+        if plr.Character then
+            shadow_rush_velocity_watch_character(plr.Character)
+        end
+
+        local shadow_rush_character_added = plr.CharacterAdded:Connect(function(character)
+            shadow_rush_active_until = 0
+            shadow_rush_velocity_watch_character(character)
+        end)
+
+        if shared and shared.connections then
+            shared.connections[#shared.connections + 1] = shadow_rush_character_added
+        end
+    end
 
     local friends_file = "HYDROXIDE/friends.json"
     function cheat_client:save_friends()
@@ -7509,6 +7988,15 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 --// Rift Dive
 --// Gelidus
 --// Gate
+--// Grapple
+--// Owl Slash
+--// Shadowrush
+--// Triple Dagger Throw
+--// Lethality
+--// Agility
+--// Bane
+--// Verto
+--// Snarvindur (Snap)
 
 local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
@@ -7674,6 +8162,165 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             required_instance_name_2 = "ConeCD",
             required_instance_class_2 = "Accessory",
         },
+
+        --------------------------------------------------
+        -- GRAPPLE
+        --
+        -- After using Grapple, wait up to 0.700s for a NEW
+        -- BodyVelocity named GrappleVelocity.
+        --
+        -- Velocity.Y <= 67  -> 6.2s cooldown
+        -- Velocity.Y >  67  -> 7.55s cooldown
+        --------------------------------------------------
+
+        {
+            name = "Grapple",
+
+            confirmation_window = 0.700,
+            cooldown_time = 7.55,
+
+            special = "grapple_velocity_cooldown",
+
+            grapple_velocity_name = "GrappleVelocity",
+            grapple_velocity_y_threshold = 67,
+            grapple_low_cooldown = 6.2,
+            grapple_high_cooldown = 7.55,
+        },
+
+        --------------------------------------------------
+        -- OWL SLASH
+        --
+        -- After using Owl Slash, wait up to 0.200s for a NEW
+        -- ParticleEmitter named Feathers directly under Torso.
+        -- If seen, apply a 10.8s cooldown.
+        --------------------------------------------------
+
+        {
+            name = "Owl Slash",
+
+            confirmation_window = 0.200,
+            cooldown_time = 10.8,
+
+            special = "instance_single",
+
+            required_instance_name = "Feathers",
+            required_instance_class = "ParticleEmitter",
+            required_parent_name = "Torso",
+        },
+
+        --------------------------------------------------
+        -- SHADOWRUSH
+        --
+        -- After using Shadowrush, wait up to 0.250s for
+        -- animation 3434270711. If it plays in that window,
+        -- apply a 9.12s cooldown.
+        --------------------------------------------------
+
+        {
+            "Shadowrush",
+            "3434270711",
+            0.250,
+            9.12
+        },
+
+        --------------------------------------------------
+        -- TRIPLE DAGGER THROW
+        --
+        -- After using Triple Dagger Throw, wait up to 0.250s
+        -- for animation 107564055366236. If it plays in that
+        -- window, apply a 10.85s cooldown.
+        --------------------------------------------------
+
+        {
+            "Triple Dagger Throw",
+            "107564055366236",
+            0.250,
+            10.85
+        },
+
+        --------------------------------------------------
+        -- LETHALITY
+        --
+        -- After using Lethality, wait up to 0.250s for
+        -- animation 2698082222. If it plays in that
+        -- window, apply a 31.9s cooldown.
+        --------------------------------------------------
+
+        {
+            "Lethality",
+            "2698082222",
+            0.250,
+            31.9
+        },
+
+        --------------------------------------------------
+        -- AGILITY
+        --
+        -- After using Agility, wait up to 0.250s for a NEW
+        -- IntValue named AttackSpeedBoost under Boosts with
+        -- an exact value of 6. If seen, apply a 42.3s cooldown.
+        --------------------------------------------------
+
+        {
+            name = "Agility",
+
+            confirmation_window = 0.250,
+            cooldown_time = 42.3,
+
+            special = "instance_single",
+
+            required_instance_name = "AttackSpeedBoost",
+            required_instance_class = "IntValue",
+            required_parent_name = "Boosts",
+            required_instance_value = 6,
+        },
+
+        --------------------------------------------------
+        -- BANE
+        --
+        -- After using Bane, wait up to 0.250s for a NEW
+        -- Accessory named BaneEff. If seen, apply a 36.4s cooldown.
+        --------------------------------------------------
+
+        {
+            name = "Bane",
+
+            confirmation_window = 0.250,
+            cooldown_time = 36.4,
+
+            special = "instance_single",
+
+            required_instance_name = "BaneEff",
+            required_instance_class = "Accessory",
+        },
+
+        --------------------------------------------------
+        -- VERTO
+        --
+        -- Verto is armed by M2 / RightClick. After that input, BOTH
+        -- confirmation signals must occur within the same 0.750s window:
+        --   1. Animation 2888533351
+        --   2. NEW Sound named summon directly under Torso
+        -- This is a normal RED cooldown, not the blue Snap system.
+        --------------------------------------------------
+
+        {
+            name = "Verto",
+
+            animation_id = "2888533351",
+            animation_window = 0.750,
+            confirmation_window = 0.750,
+            cooldown_time = 20.8,
+
+            activation_remote = "RightClick",
+            special = "instance_and_animation",
+
+            required_instance_name = "summon",
+            required_instance_class = "Sound",
+            required_parent_name = "Torso",
+            required_instance_window = 0.750,
+        },
+
         --------------------------------------------------
         -- GREAT CYCLONE
         --
@@ -7794,6 +8441,8 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
                 cooldown_time = tonumber(row.cooldown_time) or 0,
 
+                activation_remote = row.activation_remote or "LeftClick",
+
                 special = row.special,
 
                 speedlock_window = tonumber(row.speedlock_window),
@@ -7806,6 +8455,8 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
                 required_instance_name_2 = row.required_instance_name_2,
                 required_instance_class_2 = row.required_instance_class_2,
+
+                required_parent_name = row.required_parent_name,
 
                 required_instance_window =
                     tonumber(row.required_instance_window),
@@ -7843,6 +8494,30 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                 max_recasts =
                     tonumber(row.max_recasts),
 
+                grapple_velocity_name =
+                    row.grapple_velocity_name,
+
+                grapple_velocity_y_threshold =
+                    tonumber(row.grapple_velocity_y_threshold),
+
+                grapple_low_cooldown =
+                    tonumber(row.grapple_low_cooldown),
+
+                grapple_high_cooldown =
+                    tonumber(row.grapple_high_cooldown),
+
+                grapple_cord_name =
+                    row.grapple_cord_name,
+
+                grapple_cord_parent_name =
+                    row.grapple_cord_parent_name,
+
+                grapple_hit_cooldown =
+                    tonumber(row.grapple_hit_cooldown),
+
+                grapple_miss_cooldown =
+                    tonumber(row.grapple_miss_cooldown),
+
                 block_retrigger_while_special =
                     row.block_retrigger_while_special ~= false,
             }
@@ -7856,6 +8531,8 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                 animation_window = tonumber(row[3]) or 0,
 
                 cooldown_time = tonumber(row[4]) or 0,
+
+                activation_remote = "LeftClick",
             }
 
         end
@@ -7922,6 +8599,15 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             pending_required_instance_seen = false,
             pending_required_instance_2_seen = false,
             pending_animation_seen = false,
+
+            --------------------------------------------------
+            -- PASSIVE INSTANCE + ANIMATION
+            --------------------------------------------------
+
+            passive_signal_started_at = nil,
+            passive_animation_seen = false,
+            passive_instance_seen = false,
+            passive_lock_until = 0,
 
             --------------------------------------------------
             -- GREAT CYCLONE
@@ -8052,6 +8738,26 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                 gate_timer = 8.4,
 
                 nofall_cooldown = 7.15,
+            },
+
+            --------------------------------------------------
+            -- SNARVINDUR
+            --
+            -- Blue/shared Snap cooldown. RightClick arms the
+            -- detector, then animation 2818022247 must play
+            -- within 0.350s.
+            --------------------------------------------------
+
+            Snarvindur = {
+
+                name = "Snarvindur",
+
+                special = "animation",
+
+                animation_id = "2818022247",
+                animation_window = 0.350,
+
+                shared_cooldown = 8.85,
             },
         }
 
@@ -8834,6 +9540,52 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         end
 
         --------------------------------------------------
+        -- SNAP ANIMATION SIGNAL
+        --------------------------------------------------
+
+        local function handle_animation(animation_id)
+
+            if not ENABLED
+                or not snap_state.pending_name
+                or not snap_state.pending_at
+            then
+                return
+            end
+
+            local profile =
+                snap_profiles[
+                    snap_state.pending_name
+                ]
+
+            if not profile
+                or profile.special ~= "animation"
+            then
+                return
+            end
+
+            if tostring(animation_id) ~= tostring(profile.animation_id) then
+                return
+            end
+
+            local elapsed =
+                os.clock() - snap_state.pending_at
+
+            local window =
+                profile.animation_window or 0.350
+
+            if elapsed < 0
+                or elapsed > window
+            then
+                return
+            end
+
+            finish_pending_with_shared_cooldown(
+                snap_state.pending_token,
+                profile.shared_cooldown or 6.0
+            )
+        end
+
+        --------------------------------------------------
         -- EQUIPPED SNAP
         --------------------------------------------------
 
@@ -8946,6 +9698,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
         return {
             handle_remote = handle_remote,
+            handle_animation = handle_animation,
             handle_descendant_added =
                 handle_descendant_added,
             reset_all = reset_all,
@@ -9015,6 +9768,11 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         state.pending_required_instance_seen = false
         state.pending_required_instance_2_seen = false
         state.pending_animation_seen = false
+
+        state.passive_signal_started_at = nil
+        state.passive_animation_seen = false
+        state.passive_instance_seen = false
+        state.passive_lock_until = 0
 
         --------------------------------------------------
         -- SPECIAL
@@ -10449,6 +11207,82 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
     end
 
     --------------------------------------------------
+    -- PASSIVE INSTANCE + ANIMATION CONFIRMATION
+    --
+    -- Used by moves such as Verto that do not have a reliable click
+    -- remote. Either signal can arrive first. The first valid signal
+    -- opens the 0.750s pairing window; the second must arrive before
+    -- that window expires.
+    --------------------------------------------------
+
+    local function register_passive_instance_animation_signal(
+        profile,
+        state,
+        signal_name
+    )
+
+        if not ENABLED or not profile or not state then
+            return false
+        end
+
+        local now = os.clock()
+
+        if state.passive_lock_until
+            and now < state.passive_lock_until
+        then
+            return false
+        end
+
+        local window =
+            profile.confirmation_window
+            or profile.required_instance_window
+            or profile.animation_window
+            or 0.750
+
+        if not state.passive_signal_started_at
+            or now - state.passive_signal_started_at > window
+        then
+            state.passive_signal_started_at = now
+            state.passive_animation_seen = false
+            state.passive_instance_seen = false
+        end
+
+        if signal_name == "animation" then
+            state.passive_animation_seen = true
+        elseif signal_name == "instance" then
+            state.passive_instance_seen = true
+        end
+
+        if not state.passive_animation_seen
+            or not state.passive_instance_seen
+        then
+            return false
+        end
+
+        local elapsed =
+            now - state.passive_signal_started_at
+
+        if elapsed < 0 or elapsed > window then
+            return false
+        end
+
+        state.passive_signal_started_at = nil
+        state.passive_animation_seen = false
+        state.passive_instance_seen = false
+
+        -- Prevent the same physical activation from being confirmed twice
+        -- if duplicate replication/animation callbacks arrive together.
+        state.passive_lock_until = now + 1.0
+
+        start_cooldown(
+            profile,
+            find_hotbar_button(profile.name)
+        )
+
+        return true
+    end
+
+    --------------------------------------------------
     -- INSTANCE + ANIMATION CONFIRMATION
     --------------------------------------------------
 
@@ -10586,6 +11420,257 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
     end
 
     --------------------------------------------------
+    -- GRAPPLE CORD TARGET CHECK
+    --------------------------------------------------
+
+    local function get_attachment_part(attachment)
+
+        if typeof(attachment) ~= "Instance"
+            or not attachment:IsA("Attachment")
+        then
+            return nil
+        end
+
+        local parent = attachment.Parent
+
+        if parent and parent:IsA("BasePart") then
+            return parent
+        end
+
+        return parent
+            and parent:FindFirstAncestorWhichIsA("BasePart")
+            or nil
+    end
+
+    local function grapple_cord_attached_to_other_torso(beam)
+
+        if not beam
+            or not beam:IsA("Beam")
+        then
+            return false
+        end
+
+        local character = plr.Character
+
+        if not character then
+            return false
+        end
+
+        local attachment_0 = beam.Attachment0
+        local attachment_1 = beam.Attachment1
+
+        local part_0 = get_attachment_part(attachment_0)
+        local part_1 = get_attachment_part(attachment_1)
+
+        local function is_other_torso(part)
+
+            return part
+                and part.Name == "Torso"
+                and not part:IsDescendantOf(character)
+        end
+
+        return is_other_torso(part_0)
+            or is_other_torso(part_1)
+    end
+
+
+    --------------------------------------------------
+    -- GRAPPLE CORD + 7.4s VELOCITY CONFIRMATION
+    --------------------------------------------------
+
+    local function grapple_exact_vector3(value, expected)
+
+        return typeof(value) == "Vector3"
+            and value.X == expected.X
+            and value.Y == expected.Y
+            and value.Z == expected.Z
+    end
+
+    local function grapple_local_high_velocity_matches(profile, mover, character)
+
+        if not mover
+            or not mover.Parent
+            or not mover:IsA("BodyVelocity")
+            or mover.Name ~= (
+                profile.grapple_velocity_name
+                or "GrappleVelocity"
+            )
+            or not character
+            or not mover:IsDescendantOf(character)
+        then
+            return false
+        end
+
+        local expected_force =
+            Vector3.new(1000000, 1000000, 1000000)
+
+        if not grapple_exact_vector3(
+            mover.MaxForce,
+            expected_force
+        ) then
+            return false
+        end
+
+        local velocity = mover.Velocity
+
+        if typeof(velocity) ~= "Vector3" then
+            return false
+        end
+
+        local threshold =
+            profile.grapple_velocity_y_threshold
+            or 53
+
+        return velocity.Y > threshold
+    end
+
+    local function start_grapple_cord_velocity_window(profile, state, token)
+
+        local activation_at = state.pending_at
+        local cached_button = state.pending_button
+        local window = profile.confirmation_window or 0.850
+        local character = plr.Character
+
+        if not activation_at or not character then
+            return
+        end
+
+        --------------------------------------------------
+        -- SNAPSHOT EXISTING CONNECTED CORD
+        --
+        -- This keeps the working torso-grapple spam protection without
+        -- changing the older 7.4s GrappleVelocity detection behavior.
+        --------------------------------------------------
+
+        local initial_cord_connected = false
+
+        do
+            local left_arm =
+                FindFirstChild(character, profile.grapple_cord_parent_name or "Left Arm")
+
+            local cord = left_arm
+                and FindFirstChild(left_arm, profile.grapple_cord_name or "Cord")
+
+            initial_cord_connected =
+                cord
+                and cord:IsA("Beam")
+                and grapple_cord_attached_to_other_torso(cord)
+                or false
+        end
+
+        -- If a Cord is already connected when a spam click arrives, do not
+        -- count it again until it has first become disconnected.
+        local cord_armed = not initial_cord_connected
+
+        task.spawn(function()
+
+            local deadline = activation_at + window
+            local connected_cord_seen = false
+            local high_velocity_seen = false
+
+            while ENABLED
+                and state.pending_token == token
+                and plr.Character == character
+                and os.clock() <= deadline
+            do
+                --------------------------------------------------
+                -- PRIORITY 1: NEW CONNECTED GRAPPLE CORD -> 6.3s
+                --------------------------------------------------
+
+                local left_arm =
+                    FindFirstChild(character, profile.grapple_cord_parent_name or "Left Arm")
+
+                local cord = left_arm
+                    and FindFirstChild(left_arm, profile.grapple_cord_name or "Cord")
+
+                local cord_connected =
+                    cord
+                    and cord:IsA("Beam")
+                    and grapple_cord_attached_to_other_torso(cord)
+                    or false
+
+                if not cord_connected then
+                    cord_armed = true
+                elseif cord_armed then
+                    connected_cord_seen = true
+                    break
+                end
+
+                --------------------------------------------------
+                -- PRIORITY 2: LOCAL GrappleVelocity -> 7.4s
+                --
+                -- Keep the older working 7.4s detection path exactly:
+                -- poll the character each frame for GrappleVelocity and
+                -- accept it whenever its replicated values match.
+                --------------------------------------------------
+
+                local grapple_velocity =
+                    FindFirstChild(
+                        character,
+                        profile.grapple_velocity_name or "GrappleVelocity",
+                        true
+                    )
+
+                if grapple_velocity
+                    and grapple_local_high_velocity_matches(
+                        profile,
+                        grapple_velocity,
+                        character
+                    )
+                then
+                    high_velocity_seen = true
+                end
+
+                rs.Heartbeat:Wait()
+            end
+
+            if not ENABLED
+                or state.pending_token ~= token
+                or plr.Character ~= character
+            then
+                return
+            end
+
+            local cooldown = nil
+
+            -- Connected torso grapple always has priority over the
+            -- high-Y GrappleVelocity result.
+            if connected_cord_seen then
+                cooldown = profile.grapple_hit_cooldown or 6.3
+            elseif high_velocity_seen then
+                cooldown = profile.grapple_high_cooldown or 7.55
+            end
+
+            --------------------------------------------------
+            -- INVALIDATE BEFORE START / EXIT
+            --------------------------------------------------
+
+            state.pending_at = nil
+            state.pending_button = nil
+            state.pending_token += 1
+
+            state.pending_required_instance_seen = false
+            state.pending_required_instance_2_seen = false
+            state.pending_animation_seen = false
+
+            if not cooldown then
+                return
+            end
+
+            -- Small resolved-use lock: the same physical grapple can emit several
+            -- LeftClick calls while its Cord/velocity still exists. Do not let those
+            -- clicks restart the visual. A real later grapple occurs far after this.
+            state.grapple_retrigger_until = os.clock() + 1.0
+
+            start_cooldown(
+                profile,
+                cached_button,
+                cooldown
+            )
+        end)
+    end
+
+    --------------------------------------------------
     -- CHARACTER DESCENDANT ADDED
     --------------------------------------------------
 
@@ -10610,10 +11695,46 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         do
 
             --------------------------------------------------
+            -- PASSIVE INSTANCE + ANIMATION
+            --------------------------------------------------
+
+            if profile.special == "passive_instance_and_animation" then
+
+                local state =
+                    states[profile.name]
+
+                local parent_ok =
+                    not profile.required_parent_name
+                    or (
+                        object.Parent
+                        and object.Parent.Name ==
+                            profile.required_parent_name
+                    )
+
+                local class_ok =
+                    not profile.required_instance_class
+                    or object:IsA(
+                        profile.required_instance_class
+                    )
+
+                if state
+                    and parent_ok
+                    and class_ok
+                    and object.Name ==
+                        profile.required_instance_name
+                then
+                    register_passive_instance_animation_signal(
+                        profile,
+                        state,
+                        "instance"
+                    )
+                end
+
+            --------------------------------------------------
             -- INSTANCE + ANIMATION
             --------------------------------------------------
 
-            if profile.special == "instance_and_animation" then
+            elseif profile.special == "instance_and_animation" then
 
                 local state =
                     states[profile.name]
@@ -10630,6 +11751,14 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                         profile.required_instance_window
                         or profile.animation_window
 
+                    local parent_ok =
+                        not profile.required_parent_name
+                        or (
+                            object.Parent
+                            and object.Parent.Name ==
+                                profile.required_parent_name
+                        )
+
                     local class_ok =
                         not profile.required_instance_class
                         or object:IsA(
@@ -10640,6 +11769,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                         and elapsed <= window
                         and object.Name ==
                             profile.required_instance_name
+                        and parent_ok
                         and class_ok
                     then
 
@@ -10680,8 +11810,17 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                         and elapsed <= window
                     then
 
-                        if object.Name ==
-                            profile.required_instance_name
+                        local parent_ok =
+                            not profile.required_parent_name
+                            or (
+                                object.Parent
+                                and object.Parent.Name ==
+                                    profile.required_parent_name
+                            )
+
+                        if parent_ok
+                            and object.Name ==
+                                profile.required_instance_name
                             and (
                                 not profile.required_instance_class
                                 or object:IsA(
@@ -10693,8 +11832,9 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                             state.pending_required_instance_seen =
                                 true
 
-                        elseif object.Name ==
-                            profile.required_instance_name_2
+                        elseif parent_ok
+                            and object.Name ==
+                                profile.required_instance_name_2
                             and (
                                 not profile.required_instance_class_2
                                 or object:IsA(
@@ -10712,6 +11852,323 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                             state
                         )
                     end
+                end
+
+            --------------------------------------------------
+            -- SINGLE INSTANCE CONFIRMATION
+            --------------------------------------------------
+
+            elseif profile.special == "instance_single" then
+
+                local state =
+                    states[profile.name]
+
+                if state
+                    and state.pending_at
+                then
+
+                    local elapsed =
+                        os.clock()
+                        - state.pending_at
+
+                    local window =
+                        profile.confirmation_window
+                        or profile.required_instance_window
+                        or 0
+
+                    local parent_ok =
+                        not profile.required_parent_name
+                        or (
+                            object.Parent
+                            and object.Parent.Name ==
+                                profile.required_parent_name
+                        )
+
+                    local class_ok =
+                        not profile.required_instance_class
+                        or object:IsA(
+                            profile.required_instance_class
+                        )
+
+                    local value_ok =
+                        profile.required_instance_value == nil
+                        or (
+                            object:IsA("ValueBase")
+                            and object.Value ==
+                                profile.required_instance_value
+                        )
+
+                    if elapsed >= 0
+                        and elapsed <= window
+                        and parent_ok
+                        and object.Name ==
+                            profile.required_instance_name
+                        and class_ok
+                        and value_ok
+                    then
+
+                        local cached_button =
+                            state.pending_button
+
+                        --------------------------------------------------
+                        -- INVALIDATE BEFORE START
+                        --------------------------------------------------
+
+                        state.pending_at = nil
+                        state.pending_button = nil
+
+                        state.pending_token += 1
+
+                        state.pending_required_instance_seen =
+                            false
+
+                        state.pending_required_instance_2_seen =
+                            false
+
+                        state.pending_animation_seen =
+                            false
+
+                        --------------------------------------------------
+                        -- START CD
+                        --------------------------------------------------
+
+                        start_cooldown(
+                            profile,
+                            cached_button
+                        )
+                    end
+                end
+
+            --------------------------------------------------
+            -- GRAPPLE CORD
+            --------------------------------------------------
+
+            elseif profile.special == "grapple_cord_cooldown" then
+
+                local state =
+                    states[profile.name]
+
+                if state
+                    and state.pending_at
+                    and object:IsA("Beam")
+                then
+
+                    local elapsed =
+                        os.clock() - state.pending_at
+
+                    local window =
+                        profile.confirmation_window
+                        or 0.700
+
+                    local parent_ok =
+                        object.Parent
+                        and object.Parent.Name == (
+                            profile.grapple_cord_parent_name
+                            or "Left Arm"
+                        )
+
+                    if elapsed >= 0
+                        and elapsed <= window
+                        and parent_ok
+                        and object.Name == (
+                            profile.grapple_cord_name
+                            or "Cord"
+                        )
+                    then
+
+                        local activation_token =
+                            state.pending_token
+
+                        local activation_at =
+                            state.pending_at
+
+                        local cached_button =
+                            state.pending_button
+
+                        local deadline =
+                            activation_at + window
+
+                        -- Cord endpoints can populate a frame or two after the Beam
+                        -- itself is parented. Watch only until the original 0.700s
+                        -- Grapple confirmation deadline.
+                        task.spawn(function()
+
+                            local attached_to_target_torso = false
+
+                            while ENABLED
+                                and state.pending_token == activation_token
+                                and os.clock() <= deadline
+                            do
+
+                                if object.Parent
+                                    and grapple_cord_attached_to_other_torso(object)
+                                then
+                                    attached_to_target_torso = true
+                                    break
+                                end
+
+                                if not object.Parent then
+                                    break
+                                end
+
+                                rs.Heartbeat:Wait()
+                            end
+
+                            if not ENABLED
+                                or state.pending_token ~= activation_token
+                            then
+                                return
+                            end
+
+                            local cooldown =
+                                attached_to_target_torso
+                                and (
+                                    profile.grapple_hit_cooldown
+                                    or 6.3
+                                )
+                                or (
+                                    profile.grapple_miss_cooldown
+                                    or 7.55
+                                )
+
+                            --------------------------------------------------
+                            -- INVALIDATE BEFORE START
+                            --------------------------------------------------
+
+                            state.pending_at = nil
+                            state.pending_button = nil
+
+                            state.pending_token += 1
+
+                            state.pending_required_instance_seen =
+                                false
+
+                            state.pending_required_instance_2_seen =
+                                false
+
+                            state.pending_animation_seen =
+                                false
+
+                            --------------------------------------------------
+                            -- START VARIABLE GRAPPLE COOLDOWN
+                            --------------------------------------------------
+
+                            start_cooldown(
+                                profile,
+                                cached_button,
+                                cooldown
+                            )
+                        end)
+                    end
+                end
+
+            --------------------------------------------------
+            -- GRAPPLE VELOCITY
+            --------------------------------------------------
+
+            elseif profile.special == "grapple_velocity_cooldown" then
+
+                local state =
+                    states[profile.name]
+
+                if state
+                    and state.pending_at
+                    and object:IsA("BodyVelocity")
+                then
+
+                    local activation_token =
+                        state.pending_token
+
+                    local activation_at =
+                        state.pending_at
+
+                    local cached_button =
+                        state.pending_button
+
+                    local window =
+                        profile.confirmation_window
+                        or 0.7
+
+                    -- DescendantAdded can happen before Name/Velocity finish
+                    -- initializing, so keep checking this newly-added mover until
+                    -- the 0.7s activation window expires.
+                    task.spawn(function()
+
+                        while ENABLED
+                            and state.pending_token == activation_token
+                            and state.pending_at == activation_at
+                            and object.Parent
+                        do
+
+                            local elapsed =
+                                os.clock() - activation_at
+
+                            if elapsed < 0
+                                or elapsed > window
+                            then
+                                return
+                            end
+
+                            if object.Name == (
+                                profile.grapple_velocity_name
+                                or "GrappleVelocity"
+                            ) then
+
+                                local velocity =
+                                    object.Velocity
+
+                                if typeof(velocity) == "Vector3" then
+
+                                    local threshold =
+                                        profile.grapple_velocity_y_threshold
+                                        or 67
+
+                                    local cooldown =
+                                        velocity.Y > threshold
+                                        and (
+                                            profile.grapple_high_cooldown
+                                            or 7.55
+                                        )
+                                        or (
+                                            profile.grapple_low_cooldown
+                                            or 6.2
+                                        )
+
+                                    --------------------------------------------------
+                                    -- INVALIDATE BEFORE START
+                                    --------------------------------------------------
+
+                                    state.pending_at = nil
+                                    state.pending_button = nil
+
+                                    state.pending_token += 1
+
+                                    state.pending_required_instance_seen =
+                                        false
+
+                                    state.pending_required_instance_2_seen =
+                                        false
+
+                                    state.pending_animation_seen =
+                                        false
+
+                                    --------------------------------------------------
+                                    -- START VARIABLE GRAPPLE COOLDOWN
+                                    --------------------------------------------------
+
+                                    start_cooldown(
+                                        profile,
+                                        cached_button,
+                                        cooldown
+                                    )
+
+                                    return
+                                end
+                            end
+
+                            rs.Heartbeat:Wait()
+                        end
+                    end)
                 end
 
             --------------------------------------------------
@@ -10894,14 +12351,24 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             local state =
                 states[profile.name]
 
-            local pending_at =
-                state
-                and state.pending_at
+            if state
+                and profile.special == "passive_instance_and_animation"
+            then
+                register_passive_instance_animation_signal(
+                    profile,
+                    state,
+                    "animation"
+                )
+            else
 
-            if pending_at then
+                local pending_at =
+                    state
+                    and state.pending_at
 
-                local delta =
-                    now - pending_at
+                if pending_at then
+
+                    local delta =
+                        now - pending_at
 
                 if delta >= 0
                     and delta <= profile.animation_window
@@ -11033,6 +12500,8 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
             end
 
+            end
+
         end
     end
 
@@ -11151,10 +12620,17 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
                                             return
                                         end
 
-                                        confirm_animation(
+                                        local animation_id =
                                             clean_animation_id(
                                                 animation.AnimationId
-                                            ),
+                                            )
+
+                                        snap_system.handle_animation(
+                                            animation_id
+                                        )
+
+                                        confirm_animation(
+                                            animation_id,
                                             track
                                         )
 
@@ -11209,12 +12685,15 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         )
 
         --------------------------------------------------
-        -- NORMAL LEFTCLICK
+        -- NORMAL MOVE INPUT
+        --
+        -- Most moves activate through LeftClick. A profile may
+        -- explicitly opt into another skill remote (Verto uses
+        -- RightClick/M2) while still using the normal RED cooldown.
         --------------------------------------------------
 
         if not remotes_folder
             or event.Parent ~= remotes_folder
-            or event.Name ~= "LeftClick"
         then
             return
         end
@@ -11226,10 +12705,39 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             return
         end
 
+        -- Passive moves (Verto) are confirmed from their replicated
+        -- animation + instance signals and do not arm from click remotes.
+        if profile.special == "passive_instance_and_animation" then
+            return
+        end
+
+        local activation_remote =
+            profile.activation_remote
+            or "LeftClick"
+
+        if event.Name ~= activation_remote then
+            return
+        end
+
         local state =
             states[profile.name]
 
         if not state then
+            return
+        end
+
+        --------------------------------------------------
+        -- GRAPPLE SPAM-CLICK GUARD
+        --
+        -- Once one grapple has been positively confirmed, ignore the
+        -- extra LeftClick calls generated by spam-clicking for a short
+        -- period so the same Cord cannot restart the cooldown visual.
+        --------------------------------------------------
+
+        if profile.special == "grapple_cord_velocity_cooldown"
+            and state.grapple_retrigger_until
+            and os.clock() < state.grapple_retrigger_until
+        then
             return
         end
 
@@ -11276,6 +12784,21 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
 
         state.pending_animation_seen =
             false
+
+        --------------------------------------------------
+        -- GRAPPLE CORD + VELOCITY CONFIRMATION
+        --------------------------------------------------
+
+        if profile.special == "grapple_cord_velocity_cooldown" then
+
+            start_grapple_cord_velocity_window(
+                profile,
+                state,
+                token
+            )
+
+            return
+        end
 
         --------------------------------------------------
         -- WING SOAR VELOCITY CONFIRMATION
@@ -11677,6 +13200,11 @@ end
                 end
             })
 
+            group_combat_utils:AddToggle("BlacksmithM2Serum", {
+                Text = "Blacksmith M2 Serum",
+                Default = cheat_client.config.blacksmith_m2_serum
+            })
+
             group_combat_utils:AddToggle("HoppaBoost", {
                 Text = "Hoppa Boost",
                 Default = cheat_client.config.hoppa_boost
@@ -11846,6 +13374,49 @@ end
                 Default = cheat_client.config.visible_check
             })
 
+            -- Shinobi movement velocity modifiers directly below Silent Aim.
+            local group_shinobi = Tabs.Combat:AddRightGroupbox("Shinobi")
+
+            group_shinobi:AddToggle("GrappleVelocity", {
+                Text = "Grapple Velocity",
+                Default = cheat_client.config.grapple_velocity,
+                Callback = function(value)
+                    cheat_client.config.grapple_velocity = value
+                end
+            })
+
+            group_shinobi:AddSlider("GrappleVelocityMultiplier", {
+                Text = "Grapple Velocity Multiplier",
+                Default = cheat_client.config.grapple_velocity_multiplier or 1.0,
+                Min = 1.0,
+                Max = 2.5,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.grapple_velocity_multiplier = value
+                end
+            })
+
+            group_shinobi:AddToggle("ShadowRushVelocity", {
+                Text = "Shadow Rush Velocity",
+                Default = cheat_client.config.shadow_rush_velocity,
+                Callback = function(value)
+                    cheat_client.config.shadow_rush_velocity = value
+                end
+            })
+
+            group_shinobi:AddSlider("ShadowRushVelocityMultiplier", {
+                Text = "Shadow Rush Velocity Multiplier",
+                Default = cheat_client.config.shadow_rush_velocity_multiplier or 1.0,
+                Min = 1.0,
+                Max = 2.5,
+                Rounding = 1,
+                Compact = false,
+                Callback = function(value)
+                    cheat_client.config.shadow_rush_velocity_multiplier = value
+                end
+            })
+
             Toggles.NoStun:OnChanged(function()
                 local value = Toggles.NoStun.Value
                 cheat_client.config.no_stun = value
@@ -11899,6 +13470,10 @@ end
                         cheat_client.stop_gelidus_boost()
                     end
                 end
+            end)
+
+            Toggles.BlacksmithM2Serum:OnChanged(function()
+                cheat_client.config.blacksmith_m2_serum = Toggles.BlacksmithM2Serum.Value
             end)
 
             Toggles.HoppaBoost:OnChanged(function()
@@ -26483,6 +28058,13 @@ end
                     local cooldown_controller = cheat_client.cooldown_visualizer
                     if cooldown_controller and cooldown_controller.handle_remote then
                         cooldown_controller.handle_remote(Event, remotes_folder)
+                    end
+
+                    -- Shadow Rush Velocity uses the same LeftClick skill-use signal as
+                    -- the Cooldown Visualizer, but remains independent of that toggle.
+                    local shadow_rush_velocity_handler = cheat_client.shadow_rush_velocity_handle_remote
+                    if shadow_rush_velocity_handler then
+                        shadow_rush_velocity_handler(Event, remotes_folder)
                     end
 
                     if shared and not mana_remote and remotes_folder and Event.Parent == remotes_folder then

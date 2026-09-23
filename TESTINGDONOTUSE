@@ -8120,7 +8120,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
         {
             name = "Wing Soar",
 
-            confirmation_window = 0.300,
+            confirmation_window = 0.400,
             cooldown_time = 14.5,
             incomplete_recast_cooldown = 10.3,
 
@@ -8133,7 +8133,7 @@ local CooldownVisualizerSuccess, CooldownVisualizerError = pcall(function()
             recast_velocity_y_max = 63,
 
             required_maxforce_y = math.huge,
-            recast_window = 4,
+            recast_window = 5,
             max_recasts = 2,
         },
 

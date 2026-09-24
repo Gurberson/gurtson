@@ -18729,6 +18729,57 @@ end
             local kick_after_path = false
             local kick_trinket_name = ""
 
+            local function queue_trinket_kick(trinket_name, detail_message)
+                if kick_debounce then
+                    return false
+                end
+
+                kick_debounce = true
+                kick_after_path = true
+                kick_trinket_name = trinket_name
+
+                local message = detail_message or string.format("%s found! Going to last point then kicking.", trinket_name)
+                local notify_message = message:gsub(" then kicking%.$", "...")
+                print(string.format("[Kick on Trinket] %s", message))
+                utility:plain_webhook(message)
+                library:Notify(notify_message)
+                return true
+            end
+
+            local function get_phoenix_flower_count()
+                local count = 0
+
+                local function count_in(container)
+                    if not container then return end
+                    for _, obj in ipairs(container:GetChildren()) do
+                        if obj:IsA("Tool") and obj.Name:gsub(" ", "") == "PhoenixFlower" then
+                            count = count + 1
+                        end
+                    end
+                end
+
+                count_in(FindFirstChild(plr, "Backpack"))
+                count_in(plr.Character)
+                return count
+            end
+
+            local function check_phoenix_flower_kick_threshold()
+                -- Khei exclusive even if settings somehow carry over from another world.
+                if not is_khei then return false end
+                if kick_debounce then return false end
+                if not (mem:HasItem("botstarted") and mem:GetItem("botstarted") == "true") then return false end
+                if not (Toggles.KickOnPhoenixFlowerAmount and Toggles.KickOnPhoenixFlowerAmount.Value) then return false end
+
+                local threshold = math.clamp(math.floor(tonumber(Options.PhoenixFlowerKickAmount and Options.PhoenixFlowerKickAmount.Value or 1) or 1), 1, 50)
+                local count = get_phoenix_flower_count()
+                if count < threshold then return false end
+
+                return queue_trinket_kick(
+                    "Phoenix Flower",
+                    string.format("Phoenix Flower threshold reached (%d/%d)! Going to last point then kicking.", count, threshold)
+                )
+            end
+
             local proximity_warnings = {}
             local mana_initialized = false
             local emergency_gate_requested = nil
@@ -19810,6 +19861,8 @@ end
                     auto_drop_items = Options.AutoDropItems and Options.AutoDropItems.Value or {},
                     kick_on_trinket = Toggles.KickOnTrinket and Toggles.KickOnTrinket.Value or false,
                     kick_trinket_list = Options.KickTrinketList and Options.KickTrinketList.Value or {},
+                    kick_on_phoenix_flower_amount = is_khei and Toggles.KickOnPhoenixFlowerAmount and Toggles.KickOnPhoenixFlowerAmount.Value or false,
+                    phoenix_flower_kick_amount = is_khei and Options.PhoenixFlowerKickAmount and Options.PhoenixFlowerKickAmount.Value or 1,
                     stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                     reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                     hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
@@ -23495,6 +23548,23 @@ end
                 Compact = true
             })
 
+            if is_khei then
+                group_trinket_bot:AddToggle("KickOnPhoenixFlowerAmount", {
+                    Text = "Kick on Phoenix Flower Amount",
+                    Default = false,
+                    Tooltip = "Uses the same end-of-path kick logic when your Phoenix Flower count reaches the selected amount (Khei only)"
+                })
+
+                group_trinket_bot:AddSlider("PhoenixFlowerKickAmount", {
+                    Text = "Phoenix Flower Kick Amount",
+                    Default = 1,
+                    Min = 1,
+                    Max = 50,
+                    Rounding = 0,
+                    Compact = true
+                })
+            end
+
             group_trinket_bot:AddDivider()
 
             group_trinket_bot:AddDropdown("EmergencyServerhopConditions", {
@@ -23705,6 +23775,10 @@ end
                 if Options.AutoDropItems then Options.AutoDropItems:SetValue(settings.auto_drop_items or {}) end
                 if Toggles.KickOnTrinket then Toggles.KickOnTrinket:SetValue(settings.kick_on_trinket or false) end
                 if Options.KickTrinketList then Options.KickTrinketList:SetValue(settings.kick_trinket_list or {}) end
+                if is_khei then
+                    if Toggles.KickOnPhoenixFlowerAmount then Toggles.KickOnPhoenixFlowerAmount:SetValue(settings.kick_on_phoenix_flower_amount or false) end
+                    if Options.PhoenixFlowerKickAmount then Options.PhoenixFlowerKickAmount:SetValue(math.clamp(tonumber(settings.phoenix_flower_kick_amount) or 1, 1, 50)) end
+                end
                 if Toggles.StayInServer then Toggles.StayInServer:SetValue(settings.stay_in_server or false) end
                 if Toggles.ReequipGateInLoop then Toggles.ReequipGateInLoop:SetValue(settings.reequip_gate_in_loop == nil and true or settings.reequip_gate_in_loop) end
                 if Toggles.HoldPebbleInLoop then Toggles.HoldPebbleInLoop:SetValue(settings.hold_pebble_in_loop or false) end
@@ -24678,6 +24752,8 @@ end
                             auto_drop_items = Options.AutoDropItems and Options.AutoDropItems.Value or {},
                             kick_on_trinket = Toggles.KickOnTrinket and Toggles.KickOnTrinket.Value or false,
                             kick_trinket_list = Options.KickTrinketList and Options.KickTrinketList.Value or {},
+                            kick_on_phoenix_flower_amount = is_khei and Toggles.KickOnPhoenixFlowerAmount and Toggles.KickOnPhoenixFlowerAmount.Value or false,
+                            phoenix_flower_kick_amount = is_khei and Options.PhoenixFlowerKickAmount and Options.PhoenixFlowerKickAmount.Value or 1,
                             stay_in_server = Toggles.StayInServer and Toggles.StayInServer.Value or false,
                             reequip_gate_in_loop = Toggles.ReequipGateInLoop == nil and true or Toggles.ReequipGateInLoop.Value,
                             hold_pebble_in_loop = Toggles.HoldPebbleInLoop and Toggles.HoldPebbleInLoop.Value or false,
@@ -25235,6 +25311,11 @@ end
 
                     task.wait(0.05)
 
+                    -- Khei-only quantity kick: count Backpack + equipped Character.
+                    if check_phoenix_flower_kick_threshold() then
+                        return
+                    end
+
                     if not kick_debounce and Toggles.KickOnTrinket and Toggles.KickOnTrinket.Value and Options.KickTrinketList and Options.KickTrinketList.Value then
                         local selected_trinkets = Options.KickTrinketList.Value
                         for trinket_name, _ in next, selected_trinkets do
@@ -25261,6 +25342,10 @@ end
                         end
                     end
                 end)
+
+                if is_khei then
+                    task.defer(check_phoenix_flower_kick_threshold)
+                end
             end
 
             task.spawn(setup_backpack_monitoring)

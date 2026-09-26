@@ -21586,12 +21586,22 @@ end
                                 humanoid:EquipTool(gate_in_backpack)
                             end
                         else
+                            -- Perflora has priority over Pebble. If both are available,
+                            -- always keep/equip Perflora; Pebble is only the fallback.
+                            local perflora_in_backpack = FindFirstChild(plr.Backpack, "Perflora")
+                            local perflora_equipped = FindFirstChild(plr.Character, "Perflora")
                             local pebble_in_backpack = FindFirstChild(plr.Backpack, "Pebble")
                             local pebble_equipped = FindFirstChild(plr.Character, "Pebble")
 
-                            if pebble_in_backpack and pebble_in_backpack:IsA("Tool") and not pebble_equipped then
+                            if perflora_equipped then
+                                -- Already holding the highest-priority tool.
+                            elseif perflora_in_backpack and perflora_in_backpack:IsA("Tool") then
+                                humanoid:EquipTool(perflora_in_backpack)
+                            elseif pebble_equipped then
+                                -- No Perflora available, so keep Pebble equipped.
+                            elseif pebble_in_backpack and pebble_in_backpack:IsA("Tool") then
                                 humanoid:EquipTool(pebble_in_backpack)
-                            elseif not pebble_in_backpack and not pebble_equipped and Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
+                            elseif Toggles.ReequipGateInLoop and Toggles.ReequipGateInLoop.Value then
                                 local gate_in_backpack = FindFirstChild(plr.Backpack, "Gate")
                                 local gate_equipped = FindFirstChild(plr.Character, "Gate")
                                 if gate_in_backpack and not gate_equipped then
@@ -25334,9 +25344,9 @@ end
             })
 
             group_trinket_looping:AddToggle("HoldPebbleInLoop", {
-                Text = "Hold Pebble While Botting",
+                Text = "Hold Perflora/Pebble While Botting",
                 Default = cheat_client.config.hold_pebble_in_loop,
-                Tooltip = "Keeps Pebble equipped while looting; Gate automatically takes priority during gate attempts"
+                Tooltip = "Keeps Perflora equipped while looting when available, otherwise Pebble; Gate automatically takes priority during gate attempts"
             })
 
             group_trinket_looping:AddSlider("TimeBetweenLooting", {

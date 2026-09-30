@@ -9,7 +9,7 @@ local CUSTOM_SCRIPT_URL = "https://raw.githubusercontent.com/Gurberson/gurtson/r
 local loader_script = string.format([[
 if not game:IsLoaded() then game.Loaded:Wait() end
 task.wait(1)
-getgenv().hydroxide_raw = "%s"a
+getgenv().hydroxide_raw = "%s"
 local s,code=pcall(function() return game:HttpGet("%s?nonce="..tostring(math.random()), true) end)
 if not s then
     print("[QUEUE ERROR] HttpGet failed:",code)

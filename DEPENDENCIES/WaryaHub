@@ -14943,7 +14943,7 @@ end
                 end
             })
 
-            do
+            (function()
             -- Desert Mist Farm
             -- While enabled near the Desert Mist farm point, tween to the farm spot with
             -- noclip, keep Verdien equipped, charge mana to full, cast, and repeat every
@@ -15508,7 +15508,7 @@ end
                     end
                 end
             })
-            end
+            end)()
 
             if is_khei then
                 group_exploits:AddDivider()

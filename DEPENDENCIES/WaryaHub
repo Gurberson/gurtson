@@ -15462,39 +15462,66 @@ end
                 end
 
                 local function extended_hotbar_get_step(markers, main_frame)
-                    -- Derive spacing from the native marker UDim positions instead of only
-                    -- AbsolutePosition.  BackpackGui can briefly report stale absolute geometry
-                    -- during startup; that was making the empty extension markers bunch together
-                    -- until a later drag/drop forced another refresh.
-                    if #markers >= 2 and main_frame then
-                        local first = markers[1]
-                        local last = markers[#markers]
-                        local parent_width = main_frame.AbsoluteSize.X
+                    -- When BackpackFrame closes, Rogue shrinks MainFrame and the hidden
+                    -- SlotMarkers compress with it (~52px in the debug capture), while the
+                    -- ACTUAL visible native tool buttons remain on the normal ~72px cadence.
+                    --
+                    -- Use the real native TextButtons as the authoritative spacing source.
+                    -- The smallest positive gap is intentional: empty/skipped native slots can
+                    -- create 144px/216px jumps, which must not widen the extension.
+                    if main_frame then
+                        local native_buttons = {}
 
-                        if parent_width > 1 then
-                            local first_x = (first.Position.X.Scale * parent_width) + first.Position.X.Offset
-                            local last_x = (last.Position.X.Scale * parent_width) + last.Position.X.Offset
-                            local distance = (last_x - first_x) / (#markers - 1)
-
-                            if distance > 1 then
-                                return math.max(1, math.floor(distance + 0.5))
+                        for _, child in ipairs(main_frame:GetChildren()) do
+                            if child:IsA("TextButton")
+                                and child.Name:sub(1, 17) ~= "HXDExtraHotbarBut"
+                            then
+                                native_buttons[#native_buttons + 1] = child
                             end
                         end
-                    end
 
-                    if #markers >= 2 then
-                        local last = markers[#markers]
-                        local previous = markers[#markers - 1]
-                        local distance = last.AbsolutePosition.X - previous.AbsolutePosition.X
+                        table.sort(native_buttons, function(a, b)
+                            return a.AbsolutePosition.X < b.AbsolutePosition.X
+                        end)
 
-                        if distance > 1 then
-                            return math.max(1, math.floor(distance + 0.5))
+                        local best_delta = math.huge
+
+                        for i = 2, #native_buttons do
+                            local delta = native_buttons[i].AbsolutePosition.X
+                                - native_buttons[i - 1].AbsolutePosition.X
+
+                            if delta > 1 and delta < best_delta then
+                                best_delta = delta
+                            end
+                        end
+
+                        if best_delta < math.huge then
+                            return math.max(1, math.floor(best_delta + 0.5))
                         end
                     end
 
+                    -- Early-start fallback before native TextButtons are available.
+                    if #markers >= 2 then
+                        local best_delta = math.huge
+
+                        for i = 2, #markers do
+                            local delta = markers[i].AbsolutePosition.X
+                                - markers[i - 1].AbsolutePosition.X
+
+                            if delta > 1 and delta < best_delta then
+                                best_delta = delta
+                            end
+                        end
+
+                        if best_delta < math.huge then
+                            return math.max(1, math.floor(best_delta + 0.5))
+                        end
+                    end
+
+                    -- Last-resort native card dimensions: 60px card + ~12px gap.
                     local last = markers[#markers]
                     local width = last and last.AbsoluteSize.X or 60
-                    return math.max(1, math.floor(width - 1 + 0.5))
+                    return math.max(1, math.floor(width + 12 + 0.5))
                 end
 
                 local function extended_hotbar_find_visual_source_button(main_frame, tool_name)
@@ -15900,6 +15927,13 @@ end
                         local marker_template = markers[#markers]
                         local button_template = extended_hotbar_find_button_template(main_frame)
                         local step = extended_hotbar_get_step(markers, main_frame)
+
+                        -- Remember the native spacing used for this render. The watchdog below
+                        -- compares against this so BackpackClient geometry changes can repair the
+                        -- extension automatically without requiring a manual drag/drop.
+                        pcall(function()
+                            main_frame:SetAttribute("HXDExtraHotbarRenderedStep", step)
+                        end)
 
                         -- The native MainFrame ends at the center of its right-most SlotMarker.
                         -- Offsetting by the measured marker-to-marker spacing extends only rightward;
@@ -16610,6 +16644,20 @@ end
                                 end
                             end
 
+                            -- BackpackClient can finish/revise its hotbar geometry after the
+                            -- custom markers already exist. Rebuild if the native visible-button
+                            -- cadence no longer matches the spacing used by the current extension.
+                            if not missing and main_frame then
+                                local native_markers = extended_hotbar_find_markers(main_frame)
+                                if #native_markers >= 2 then
+                                    local current_step = extended_hotbar_get_step(native_markers, main_frame)
+                                    local rendered_step = tonumber(main_frame:GetAttribute("HXDExtraHotbarRenderedStep"))
+                                    if not rendered_step or math.abs(current_step - rendered_step) >= 1 then
+                                        missing = true
+                                    end
+                                end
+                            end
+
                             if missing or main_frame ~= extended_hotbar_main then
                                 extended_hotbar_refresh()
                             end
@@ -16635,12 +16683,45 @@ end
                     end
                 end)
 
+                -- BackpackFrame opening/closing changes MainFrame geometry. Refresh on the
+                -- visibility edge after one render step so Rogue applies its own resize first.
+                task.spawn(function()
+                    local backpack_gui = extended_hotbar_get_backpack_gui()
+                    local backpack_frame = backpack_gui and FindFirstChild(backpack_gui, "BackpackFrame")
+
+                    if backpack_frame then
+                        local visibility_connection = backpack_frame:GetPropertyChangedSignal("Visible"):Connect(function()
+                            task.defer(function()
+                                if shared and not shared.is_unloading and extended_hotbar_slot_count() > 0 then
+                                    rs.RenderStepped:Wait()
+                                    extended_hotbar_refresh()
+                                end
+                            end)
+                        end)
+
+                        if shared and shared.connections then
+                            shared.connections[#shared.connections + 1] = visibility_connection
+                        end
+                    end
+                end)
+
                 task.defer(extended_hotbar_refresh)
 
-                -- BackpackClient finishes sizing/positioning MainFrame shortly after execution.
-                -- Re-run once after that layout settles so empty extension slots look correct on
-                -- first load instead of only fixing themselves after the first drag assignment.
+                -- BackpackClient can settle its native geometry over multiple startup frames.
+                -- These are cheap no-ops once the geometry is stable.
                 task.delay(0.35, function()
+                    if shared and not shared.is_unloading and extended_hotbar_slot_count() > 0 then
+                        extended_hotbar_refresh()
+                    end
+                end)
+
+                task.delay(1.0, function()
+                    if shared and not shared.is_unloading and extended_hotbar_slot_count() > 0 then
+                        extended_hotbar_refresh()
+                    end
+                end)
+
+                task.delay(2.0, function()
                     if shared and not shared.is_unloading and extended_hotbar_slot_count() > 0 then
                         extended_hotbar_refresh()
                     end

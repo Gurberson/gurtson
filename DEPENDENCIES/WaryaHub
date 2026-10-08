@@ -499,6 +499,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             player_box = true,
             player_health = true,
             player_name = true,
+            player_temperature = false,
             player_tags = true,
             player_intent = true,
             player_mana = true,
@@ -5827,6 +5828,52 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             ZIndex = -10
                         }, "esp")
 
+                        -- Temperature ESP (ported from the runnable build).
+                        esp.drawings.temp_outline = utility:Create("Line", {
+                            Thickness = 7,
+                            Color = Color3.fromRGB(0, 0, 0),
+                            ZIndex = -10,
+                            Visible = false
+                        }, "esp")
+
+                        esp.drawings.temp_frost = utility:Create("Line", {
+                            Thickness = 2,
+                            Color = Color3.fromRGB(150, 235, 255),
+                            ZIndex = -8,
+                            Visible = false
+                        }, "esp")
+
+                        esp.drawings.temp_pointer_outline = utility:Create("Line", {
+                            Thickness = 5,
+                            Color = Color3.fromRGB(0, 0, 0),
+                            ZIndex = -8,
+                            Visible = false
+                        }, "esp")
+
+                        esp.drawings.temp_pointer = utility:Create("Line", {
+                            Thickness = 3,
+                            Color = Color3.fromRGB(255, 255, 255),
+                            ZIndex = -7,
+                            Visible = false
+                        }, "esp")
+
+                        for i = 1, 10 do
+                            local alpha = (i - 0.5) / 10
+                            local color
+                            if alpha < 0.5 then
+                                color = Color3.fromRGB(40, 130, 255):Lerp(Color3.fromRGB(58, 58, 66), alpha * 2)
+                            else
+                                color = Color3.fromRGB(58, 58, 66):Lerp(Color3.fromRGB(255, 80, 30), (alpha - 0.5) * 2)
+                            end
+
+                            esp.drawings["temp" .. i] = utility:Create("Line", {
+                                Thickness = 4,
+                                Color = color,
+                                ZIndex = -9,
+                                Visible = false
+                            }, "esp")
+                        end
+
                         if not trash_executor then
                             esp.drawings.box_outline = utility:Create("Square", {   
                                 Thickness = 3,
@@ -6010,6 +6057,52 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
                     end
 
+                    function esp:update_temperature(screen_position, screen_size, show_details)
+                        local temperature = self.cached_parts.temperature
+                        if Toggles and Toggles.PlayerTemperature and Toggles.PlayerTemperature.Value and show_details and temperature then
+                            local normalized = (math.clamp(temperature.Value, -1, 1) + 1) / 2
+                            local bar_y = screen_position.Y + screen_size.Y + 3
+                            local segment_width = screen_size.X / 10
+
+                            for i = 1, 10 do
+                                local segment = self.drawings["temp" .. i]
+                                segment.From = Vector2.new(screen_position.X + ((i - 1) * segment_width), bar_y)
+                                segment.To = Vector2.new(screen_position.X + (i * segment_width), bar_y)
+                                segment.Visible = true
+                            end
+
+                            self.drawings.temp_outline.From = Vector2.new(screen_position.X - 1, bar_y)
+                            self.drawings.temp_outline.To = Vector2.new(screen_position.X + screen_size.X + 1, bar_y)
+                            self.drawings.temp_outline.Visible = true
+
+                            local frost_x = screen_position.X + 0.05 * screen_size.X -- -0.9 on the [-1, 1] scale
+                            self.drawings.temp_frost.From = Vector2.new(frost_x, bar_y - 4)
+                            self.drawings.temp_frost.To = Vector2.new(frost_x, bar_y + 4)
+                            self.drawings.temp_frost.Visible = true
+
+                            local pointer_x = screen_position.X + normalized * screen_size.X
+                            local pointer_from = Vector2.new(pointer_x, bar_y - 5)
+                            local pointer_to = Vector2.new(pointer_x, bar_y + 5)
+                            self.drawings.temp_pointer_outline.From = pointer_from
+                            self.drawings.temp_pointer_outline.To = pointer_to
+                            self.drawings.temp_pointer.From = pointer_from
+                            self.drawings.temp_pointer.To = pointer_to
+                            self.drawings.temp_pointer.Color = temperature.Value <= -0.9 and Color3.fromRGB(150, 235, 255) or Color3.fromRGB(255, 255, 255)
+                            self.drawings.temp_pointer_outline.Visible = true
+                            self.drawings.temp_pointer.Visible = true
+                            return 9
+                        end
+
+                        for i = 1, 10 do
+                            self.drawings["temp" .. i].Visible = false
+                        end
+                        self.drawings.temp_outline.Visible = false
+                        self.drawings.temp_frost.Visible = false
+                        self.drawings.temp_pointer_outline.Visible = false
+                        self.drawings.temp_pointer.Visible = false
+                        return 0
+                    end
+
                     local function update_player_esp(toggled)
                         if not toggled then
                             if not esp.already_disabled then
@@ -6051,6 +6144,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                     esp.cached_parts.kenhaki = FindFirstChild(character, "KenHaki")
                                     esp.cached_parts.counterspell = FindFirstChild(character, "CounterSpell")
                                     esp.cached_parts.mana = FindFirstChild(character, "Mana")
+                                    esp.cached_parts.temperature = FindFirstChild(character, "Temperature")
                                     esp.status_cache_time = current_time
                                 end
 
@@ -6427,6 +6521,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         end
                                     end
 
+                                    local temperature_offset = esp:update_temperature(screen_position, screen_size, show_details)
+
                                     do
                                         if Toggles and Toggles.PlayerIntent and Toggles.PlayerIntent.Value and show_details then
                                             local tool = FindFirstChildOfClass(character, "Tool")
@@ -6435,7 +6531,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                                 esp.drawings.intent.Text = tool.Name
                                                 local disp_runes = esp.player.Character and esp.player.Character:GetAttribute("DispRunes")
                                                 local racial_offset = (Toggles and Toggles.PlayerRacial and Toggles.PlayerRacial.Value and disp_runes and disp_runes ~= 0 and show_details) and 15 or 0
-                                                esp.drawings.intent.Position = esp.drawings.box.Position + Vector2.new(screen_size.X/2, esp.drawings.box.Size.Y + 2 + racial_offset)
+                                                esp.drawings.intent.Position = esp.drawings.box.Position + Vector2.new(screen_size.X/2, esp.drawings.box.Size.Y + 2 + racial_offset + temperature_offset)
 
                                                 esp.drawings.intent.Visible = true
                                             else
@@ -15021,6 +15117,14 @@ end
                 group_player:AddToggle("PlayerName", {
                     Text = "Name",
                     Default = cheat_client.config.player_name
+                })
+
+                group_player:AddToggle("PlayerTemperature", {
+                    Text = "Temperature",
+                    Default = cheat_client.config.player_temperature,
+                    Callback = function(value)
+                        cheat_client.config.player_temperature = value
+                    end
                 })
 
                 group_player:AddToggle("PlayerBox", {
